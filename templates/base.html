@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Dashboard Spasial Ekonomi Kreatif Kota Malang{% endblock %}</title>
+
+    <!-- Google Fonts (Inter) -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <!-- Bootstrap 5 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Bootstrap Icons -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.2/font/bootstrap-icons.css" rel="stylesheet">
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <!-- Leaflet Plugins -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.4.1/dist/MarkerCluster.css" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.4.1/dist/MarkerCluster.Default.css" />
+    <!-- DataTables CSS -->
+    <link rel="stylesheet" href="https://cdn.datatables.net/1.13.7/css/dataTables.bootstrap5.min.css" />
+    <link rel="stylesheet" href="https://cdn.datatables.net/responsive/2.5.0/css/responsive.bootstrap5.min.css" />
+    <!-- Tom Select CSS (Bootstrap 5 theme) -->
+    <link href="https://cdn.jsdelivr.net/npm/tom-select@2.3.1/dist/css/tom-select.bootstrap5.css" rel="stylesheet" />
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+
+    <!-- Sidebar -->
+    <aside class="sidebar" id="sidebar">
+        <div class="sidebar-brand">
+            <div class="d-flex align-items-center">
+                <img src="{{ url_for('static', filename='img/logo.svg') }}" class="brand-logo" alt="Logo">
+                <div class="brand-text">
+                    <h5 class="brand-title">BAPPEDA</h5>
+                    <span class="brand-subtitle">Kota Malang</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="sidebar-menu">
+            <a href="#" class="menu-item active" data-target="overview-page">
+                <i class="bi bi-grid-fill"></i> Overview
+            </a>
+            <a href="#" class="menu-item" data-target="dbscan-page">
+                <i class="bi bi-geo-fill"></i> Clustering DBSCAN
+            </a>
+            <a href="#" class="menu-item" data-target="table-page">
+                <i class="bi bi-table"></i> Tabel Data
+            </a>
+            <a href="#" class="menu-item" data-target="manage-page">
+                <i class="bi bi-sliders"></i> Kelola Data
+            </a>
+            <a href="#" class="menu-item" data-target="tentang-page">
+                <i class="bi bi-info-circle-fill"></i> Tentang & Panduan
+            </a>
+        </div>
+
+        <div class="sidebar-footer-banner">
+            <svg class="tugu-graphic" width="120" height="120" viewBox="0 0 120 120" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <!-- Concentric ripples for the pond -->
+                <ellipse cx="60" cy="105" rx="50" ry="12" stroke="#ffffff" stroke-width="1.5" />
+                <ellipse cx="60" cy="105" rx="35" ry="8" stroke="#ffffff" stroke-width="1" stroke-dasharray="3 3" />
+                <!-- Pond base / stairs -->
+                <path d="M 30,105 L 90,105 L 85,98 L 35,98 Z" fill="#ffffff" opacity="0.3" />
+                <path d="M 38,98 L 82,98 L 78,92 L 42,92 Z" fill="#ffffff" opacity="0.5" />
+                <!-- Monument Base -->
+                <path d="M 45,92 L 75,92 L 72,78 L 48,78 Z" fill="#ffffff" opacity="0.7" />
+                <path d="M 50,78 L 70,78 L 68,68 L 52,68 Z" fill="#ffffff" opacity="0.9" stroke="#ffffff" stroke-width="0.5" />
+                <!-- Central Column -->
+                <path d="M 54,68 L 66,68 L 64,30 L 56,30 Z" fill="#ffffff" />
+                <!-- Decorative bands on column -->
+                <line x1="55" y1="55" x2="65" y2="55" stroke="#1e3a8a" stroke-width="1.5" />
+                <line x1="55.5" y1="42" x2="64.5" y2="42" stroke="#1e3a8a" stroke-width="1.5" />
+                <!-- Crown / Top ornament -->
+                <path d="M 53,30 L 67,30 L 60,12 Z" fill="#ffffff" />
+                <circle cx="60" cy="12" r="3" fill="#ffffff" />
+                <!-- Light rays emitting from the top -->
+                <path d="M 60,12 L 60,2" stroke="#ffffff" stroke-width="1" stroke-linecap="round" opacity="0.7" />
+                <path d="M 60,12 L 70,7" stroke="#ffffff" stroke-width="1" stroke-linecap="round" opacity="0.7" />
+                <path d="M 60,12 L 50,7" stroke="#ffffff" stroke-width="1" stroke-linecap="round" opacity="0.7" />
+            </svg>
+            <h6>Ekonomi Kreatif</h6>
+            <p>Mendorong Malang Maju dan Berdaya Saing</p>
+            <div class="footer-copyright">Bappeda © 2026</div>
+        </div>
+    </aside>
+
+    <!-- Main Content Panel -->
+    <main class="main-content">
+        <!-- Top Header -->
+        <div class="top-header">
+            <div class="d-flex align-items-center">
+                <button class="btn btn-outline-secondary d-lg-none me-3" id="sidebar-toggle">
+                    <i class="bi bi-list"></i>
+                </button>
+                <div>
+                    <h4 class="mb-0 fw-extrabold" style="font-weight: 800; color: #0f172a;">Dashboard Ekonomi Kreatif Kota Malang</h4>
+                    <p class="text-muted mb-0" style="font-size: 0.85rem;">Pemetaan dan Analisis Spasial Pelaku Ekonomi Kreatif (DBSCAN Clustering)</p>
+                </div>
+            </div>
+            <div class="d-flex align-items-center gap-3">
+                <div class="text-end d-none d-md-block">
+                    <span class="badge bg-light text-dark border p-2" id="live-time-badge">
+                        <i class="bi bi-calendar3 me-1 text-primary"></i> Loading...
+                    </span>
+                </div>
+                <button class="btn btn-primary d-flex align-items-center gap-2 shadow-sm rounded-pill px-3" id="btn-refresh-data">
+                    <i class="bi bi-arrow-clockwise"></i> Refresh Data
+                </button>
+            </div>
+        </div>
+
+        <!-- Global Filter -->
+        <div class="custom-card p-4 mb-4" id="filter-card">
+            <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+                <div class="d-flex align-items-center gap-2">
+                    <i class="bi bi-funnel text-primary fs-5"></i>
+                    <h5 class="mb-0 fw-bold">Filter Data Pelaku Ekraf</h5>
+                </div>
+                <span id="filter-status-badge" class="badge-active-filters">
+                    Menampilkan <strong id="active-count">0</strong> dari <strong id="total-count">0</strong> data pelaku
+                </span>
+            </div>
+            <div class="row g-3">
+                <div class="col-12 col-md-4 col-lg-2">
+                    <label class="form-label text-muted fw-bold" style="font-size: 0.75rem;">KECAMATAN <small class="fw-normal">(multi)</small></label>
+                    <select class="form-select rounded-3" id="filter-kecamatan">
+                        <option value="">Semua Kecamatan</option>
+                    </select>
+                </div>
+                <div class="col-12 col-md-4 col-lg-3">
+                    <label class="form-label text-muted fw-bold" style="font-size: 0.75rem;">KELURAHAN <small class="fw-normal">(multi)</small></label>
+                    <select class="form-select rounded-3" id="filter-kelurahan">
+                        <option value="">Semua Kelurahan</option>
+                    </select>
+                </div>
+                <div class="col-12 col-md-4 col-lg-3">
+                    <label class="form-label text-muted fw-bold" style="font-size: 0.75rem;">SUBSEKTOR EKRAF <small class="fw-normal">(multi)</small></label>
+                    <select class="form-select rounded-3" id="filter-subsektor">
+                        <option value="">Semua Subsektor</option>
+                    </select>
+                </div>
+                <div class="col-12 col-md-8 col-lg-2">
+                    <label class="form-label text-muted fw-bold" style="font-size: 0.75rem;">CARI NARASUMBER / USAHA</label>
+                    <input type="text" class="form-control rounded-3" id="filter-search" placeholder="Ketik nama...">
+                </div>
+                <div class="col-12 col-md-4 col-lg-2 d-flex flex-column justify-content-end">
+                    <label class="form-label d-none d-lg-block">&nbsp;</label>
+                    <div class="d-flex gap-2 w-100">
+                        <button class="btn btn-outline-secondary w-50 rounded-3 py-2" id="btn-reset-filter">
+                            <i class="bi bi-x-circle"></i> Reset
+                        </button>
+                        <button class="btn btn-primary w-50 rounded-3 py-2" id="btn-apply-filter">
+                            <i class="bi bi-check-circle"></i> Terapkan
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        {% block content %}{% endblock %}
+
+        <!-- Footer -->
+        <div class="d-flex justify-content-between text-muted border-top pt-3 mt-5" style="font-size: 0.8rem;">
+            <span>© 2025 BAPPEDA Kota Malang. Semua hak dilindungi.</span>
+            <span>Dashboard Ekonomi Kreatif Kota Malang v1.0.0</span>
+        </div>
+    </main>
+
+    <!-- Toast Notification -->
+    <div id="custom-toast" class="custom-toast">
+        <div class="d-flex align-items-center gap-2">
+            <i class="bi bi-check-circle-fill text-success fs-5"></i>
+            <div>
+                <strong id="toast-title">Sukses</strong>
+                <div id="toast-message" class="text-muted small">Data telah berhasil diperbarui</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="https://code.jquery.com/jquery-3.7.0.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://unpkg.com/leaflet.markercluster@1.4.1/dist/leaflet.markercluster.js"></script>
+    <script src="https://unpkg.com/leaflet.heat@0.2.0/dist/leaflet-heat.js"></script>
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+    <script src="https://cdn.datatables.net/1.13.7/js/jquery.dataTables.min.js"></script>
+    <script src="https://cdn.datatables.net/1.13.7/js/dataTables.bootstrap5.min.js"></script>
+    <script src="https://cdn.datatables.net/responsive/2.5.0/js/dataTables.responsive.min.js"></script>
+    <script src="https://cdn.datatables.net/responsive/2.5.0/js/responsive.bootstrap5.min.js"></script>
+
+    <!-- Tom Select JS -->
+    <script src="https://cdn.jsdelivr.net/npm/tom-select@2.3.1/dist/js/tom-select.complete.min.js"></script>
+    <!-- App JS -->
+    <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+    {% block scripts %}{% endblock %}
+</body>
+</html>

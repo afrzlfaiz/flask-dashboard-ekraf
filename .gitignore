@@ -1,0 +1,30 @@
+# Python Cache and Venv
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+ENV/
+env/
+.pytest_cache/
+
+# OS-specific files
+.DS_Store
+Thumbs.db
+
+# IDEs and editors
+.idea/
+.vscode/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.swp
+
+# Data files (strictly excluded)
+data/ekraf.db
+data/ekraf.xlsx
+*.db
+*.xlsx
+*.csv
+*.sqlite
