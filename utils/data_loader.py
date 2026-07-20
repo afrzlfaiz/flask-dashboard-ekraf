@@ -3,6 +3,7 @@ Memuat dan membersihkan data dari SQLite (fallback: Excel multi-sheet).
 Mengikuti pola dari main.ipynb cell 1.
 """
 
+import os
 import sqlite3
 from pathlib import Path
 from typing import Tuple
@@ -13,13 +14,19 @@ from config import DB_PATH
 
 EXCEL_PATH = "data/ekraf.xlsx"
 
+# ponytail: cache DataFrame bersih di memori, invalidasi via mtime file DB.
+# Semua mutasi lewat SQLite (CRUD/impor) → mtime berubah saat commit → reload.
+_df_cache: pd.DataFrame | None = None
+_df_mtime: float | None = None
+
 
 def _load_from_sqlite(db_path: str) -> pd.DataFrame:
-    """Baca data dari SQLite."""
+    """Baca data dari SQLite. Hanya baris aktif (is_active = 1)."""
     conn = sqlite3.connect(db_path)
-    df = pd.read_sql("SELECT * FROM pelaku_ekraf", conn)
-    conn.close()
-    return df
+    try:
+        return pd.read_sql("SELECT * FROM pelaku_ekraf WHERE is_active = 1", conn)
+    finally:
+        conn.close()
 
 
 def _load_from_excel(filepath: str) -> pd.DataFrame:
@@ -32,49 +39,57 @@ def _load_from_excel(filepath: str) -> pd.DataFrame:
     return pd.concat(dfs, ignore_index=True)
 
 
-def load_data(filepath: str | None = None) -> Tuple[pd.DataFrame, dict]:
-    """Baca data dari SQLite (default) atau Excel (fallback), bersihkan, kembalikan DataFrame + metadata."""
-    if filepath is None:
-        filepath = DB_PATH
-
-    if filepath.endswith(".db") and Path(filepath).exists():
-        df = _load_from_sqlite(filepath)
-    elif Path(EXCEL_PATH).exists():
-        df = _load_from_excel(EXCEL_PATH)
-    else:
-        df = _load_from_excel(filepath)  # user-provided path
-
-    # ── Cleaning ───────────────────────────────────────────
-    # Drop baris tanpa Kecamatan
+def _clean(df: pd.DataFrame) -> pd.DataFrame:
+    """Pembersihan: drop baris tanpa Kecamatan/Nama, koordinat numeric, whitespace."""
     df = df.dropna(subset=["Kecamatan"])
 
-    # Konversi koordinat ke numeric
     df["lat"] = pd.to_numeric(df["lat"], errors="coerce")
     df["lon"] = pd.to_numeric(df["lon"], errors="coerce")
 
-    # Bersihkan whitespace di kolom string
     str_cols = ["Nama Narasumber", "Alamat", "Kelurahan", "Kecamatan", "Sub Sektor"]
     for col in str_cols:
         if col in df.columns:
             df[col] = df[col].astype(str).str.strip()
 
-    # Drop baris kosong (Nama Narasumber kosong / NaN)
     df = df.dropna(subset=["Nama Narasumber"])
     df = df[df["Nama Narasumber"] != ""]
     df = df[df["Nama Narasumber"] != "nan"]
 
-    # Reset index setelah concat + drop
-    df = df.reset_index(drop=True)
+    return df.reset_index(drop=True)
 
-    # ── Metadata ───────────────────────────────────────────
+
+def _meta_for(df: pd.DataFrame) -> dict:
     total_baris = len(df)
-    geocoded = df["lat"].notna().sum()
+    geocoded = df["lat"].notna().sum() if "lat" in df.columns else 0
     geocoding_rate = (geocoded / total_baris * 100) if total_baris > 0 else 0.0
-
-    meta = {
+    return {
         "total_baris": total_baris,
-        "geocoded_count": geocoded,
+        "geocoded_count": int(geocoded),
         "geocoding_rate": geocoding_rate,
     }
 
-    return df, meta
+
+def load_data(filepath: str | None = None) -> Tuple[pd.DataFrame, dict]:
+    """Baca data dari SQLite (default) atau Excel (fallback), bersihkan, kembalikan DataFrame + metadata."""
+    global _df_cache, _df_mtime
+    if filepath is None:
+        filepath = DB_PATH
+
+    # Cache hanya untuk sumber SQLite default; Excel fallback selalu baca ulang.
+    if filepath.endswith(".db") and Path(filepath).exists():
+        mtime = os.path.getmtime(filepath)
+        if _df_cache is not None and _df_mtime == mtime:
+            # Sumber sama persis — kembalikan copy agar pemanggil bebas mutasi tanpa mengontaminasi cache.
+            return _df_cache.copy(), _meta_for(_df_cache)
+
+        df = _clean(_load_from_sqlite(filepath))
+        if filepath == DB_PATH:
+            _df_cache = df.copy()
+            _df_mtime = mtime
+        return df, _meta_for(df)
+
+    if Path(EXCEL_PATH).exists():
+        df = _clean(_load_from_excel(EXCEL_PATH))
+    else:
+        df = _clean(_load_from_excel(filepath))  # user-provided path
+    return df, _meta_for(df)

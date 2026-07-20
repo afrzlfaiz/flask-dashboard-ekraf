@@ -3,15 +3,42 @@
  */
 let DBScanMap = null;
 let dbscanClusterLayer = null;
+let dbscanBoundaryLayer = null;
 
 const CLUSTER_COLORS = ["#dc2626", "#2563eb", "#16a34a", "#ca8a04", "#9333ea", "#0d9488", "#ea580c", "#db2777", "#0891b2", "#4f46e5"];
 
 function initDBScanMap() {
-    DBScanMap = L.map("dbscan-map").setView([-7.978, 112.630], 12.5);
-    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-        attribution: '&copy; OpenStreetMap contributors',
-    }).addTo(DBScanMap);
-    dbscanClusterLayer = L.layerGroup().addTo(DBScanMap);
+    const container = document.getElementById("dbscan-map");
+    if (!container || typeof L === "undefined") return null;
+
+    if (!DBScanMap) {
+        DBScanMap = L.map(container, { preferCanvas: true }).setView([-7.978, 112.630], 12.5);
+        L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+            attribution: '&copy; OpenStreetMap contributors',
+        }).addTo(DBScanMap);
+        dbscanBoundaryLayer = L.layerGroup().addTo(DBScanMap);
+        // ponytail: boundaries statis — di-fetch sekali lewat loadBoundaries() dari dashboard.js.
+        if (typeof loadBoundaries === "function") {
+            loadBoundaries().then(bounds => {
+                if (bounds?.kota) {
+                    L.geoJSON(bounds.kota, {
+                        style: { color: "#003f87", fillColor: "#003f87", fillOpacity: 0.02, weight: 1.5, dashArray: "4, 4" },
+                    }).addTo(dbscanBoundaryLayer);
+                }
+                if (bounds?.kecamatan) {
+                    Object.values(bounds.kecamatan).forEach(geojson => {
+                        L.geoJSON(geojson, {
+                            style: { color: "#115cb9", fillColor: "#115cb9", fillOpacity: 0.04, weight: 1 },
+                        }).addTo(dbscanBoundaryLayer);
+                    });
+                }
+            });
+        }
+    }
+    if (!dbscanClusterLayer) {
+        dbscanClusterLayer = L.layerGroup().addTo(DBScanMap);
+    }
+    return dbscanClusterLayer;
 }
 
 async function runDBSCAN() {
@@ -19,6 +46,12 @@ async function runDBSCAN() {
     const minSamples = parseInt(document.getElementById("dbscan-min-samples").value);
 
     try {
+        const clusterLayer = initDBScanMap();
+        if (!clusterLayer) throw new Error("Peta klaster belum siap. Muat ulang halaman dan coba kembali.");
+        if (!Number.isFinite(eps) || !Number.isInteger(minSamples)) {
+            throw new Error("Parameter Epsilon dan Min Samples tidak valid.");
+        }
+
         const body = { ...App.getFilterParams(), eps, min_samples: minSamples };
         const resp = await fetch("/api/dbscan", {
             method: "POST",
@@ -26,6 +59,10 @@ async function runDBSCAN() {
             body: JSON.stringify(body),
         });
         const result = await resp.json();
+        if (!resp.ok) throw new Error(result.message || `Server merespons ${resp.status}.`);
+        if (!Array.isArray(result.points) || !Array.isArray(result.cluster_details)) {
+            throw new Error("Format hasil DBSCAN tidak valid.");
+        }
 
         // Update summary
         document.getElementById("dbscan-total-clusters").textContent = result.n_clusters;
@@ -33,7 +70,7 @@ async function runDBSCAN() {
         document.getElementById("dbscan-noise-count").textContent = result.n_noise;
 
         // Update map
-        dbscanClusterLayer.clearLayers();
+        clusterLayer.clearLayers();
         result.points.forEach(pt => {
             const color = pt.is_noise ? "#94a3b8" : CLUSTER_COLORS[(pt.cluster % CLUSTER_COLORS.length)];
             const label = pt.is_noise ? "Noise" : `Klaster #${pt.cluster + 1}`;
@@ -46,15 +83,15 @@ async function runDBSCAN() {
             marker.bindPopup(`
                 <div style="font-family:'Inter', sans-serif;">
                     <span class="badge ${pt.is_noise ? 'bg-danger' : 'bg-primary'} mb-1">${label}</span>
-                    <h6 class="mb-1 fw-bold">${pt.nama_narasumber}</h6>
-                    <small class="text-muted d-block">${pt.alamat}</small>
+                    <h6 class="mb-1 fw-bold">${App.escapeHTML(pt.nama_narasumber)}</h6>
+                    <small class="text-muted d-block">${App.escapeHTML(pt.alamat)}</small>
                     <hr class="my-1">
-                    <small>Subsektor: <strong>${pt.subsektor}</strong></small>
-                    <a href="https://www.google.com/maps?q=${pt.latitude},${pt.longitude}" target="_blank" class="btn btn-sm btn-outline-primary mt-1 w-100" style="font-size: 0.75rem;">
+                    <small>Subsektor: <strong>${App.escapeHTML(pt.subsektor)}</strong></small>
+                    <a href="https://www.google.com/maps?q=${pt.latitude},${pt.longitude}" target="_blank" rel="noopener noreferrer" class="btn btn-sm btn-outline-primary mt-1 w-100" style="font-size: 0.75rem;">
                         <i class="bi bi-geo-alt"></i> Buka di Google Maps
                     </a>
                 </div>`);
-            dbscanClusterLayer.addLayer(marker);
+            clusterLayer.addLayer(marker);
         });
 
         // Update cluster details
@@ -114,22 +151,22 @@ function renderClusterProfiles(result) {
                         <div class="small">
                             <div class="mb-2">
                                 <span class="text-muted"><i class="bi bi-geo-alt-fill me-1" style="color:${col};"></i>Kecamatan Dominan:</span>
-                                <span class="fw-semibold">${cd.dominant_kecamatan.name}</span>
+                                <span class="fw-semibold">${App.escapeHTML(cd.dominant_kecamatan.name)}</span>
                                 <span class="text-muted">(${cd.dominant_kecamatan.count} pelaku, ${cd.dominant_kecamatan.percentage}%)</span>
                             </div>
                             <div class="mb-2">
                                 <span class="text-muted"><i class="bi bi-building me-1" style="color:${col};"></i>Kelurahan Dominan:</span>
-                                <span class="fw-semibold">${cd.dominant_kelurahan.name}</span>
+                                <span class="fw-semibold">${App.escapeHTML(cd.dominant_kelurahan.name)}</span>
                                 <span class="text-muted">(${cd.dominant_kelurahan.count} pelaku, ${cd.dominant_kelurahan.percentage}%)</span>
                             </div>
                             <div class="mb-2">
                                 <span class="text-muted"><i class="bi bi-tag-fill me-1" style="color:${col};"></i>Subsektor Dominan:</span>
-                                <span class="fw-semibold">${cd.dominant_subsektor.name}</span>
+                                <span class="fw-semibold">${App.escapeHTML(cd.dominant_subsektor.name)}</span>
                                 <span class="text-muted">(${cd.dominant_subsektor.count} pelaku, ${cd.dominant_subsektor.percentage}%)</span>
                             </div>
                             <div>
                                 <span class="text-muted"><i class="bi bi-crosshair me-1" style="color:${col};"></i>Centroid:</span>
-                                <a href="${googleMapsUrl}" target="_blank" class="text-decoration-none">
+                                <a href="${googleMapsUrl}" target="_blank" rel="noopener noreferrer" class="text-decoration-none">
                                     ${cd.centroid.lat}, ${cd.centroid.lon} <i class="bi bi-box-arrow-up-right" style="font-size:0.65rem;"></i>
                                 </a>
                             </div>
@@ -157,6 +194,7 @@ async function findOptimalDBSCAN() {
             body: JSON.stringify(body),
         });
         const result = await resp.json();
+        if (!resp.ok) throw new Error(result.message || `Server merespons ${resp.status}.`);
 
         if (result.best_score <= 0) {
             hint.textContent = "Tidak ditemukan klaster dengan noise ≤ 50%. Coba longgarkan filter data.";
