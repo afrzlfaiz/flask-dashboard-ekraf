@@ -21,6 +21,15 @@ Thumbs.db
 *.sln
 *.swp
 
+# Environment configuration
+.env
+
+# Backups
+backups/
+
+# Runtime logs
+logs/*.log
+
 # Data files (strictly excluded)
 data/ekraf.db
 data/ekraf.xlsx

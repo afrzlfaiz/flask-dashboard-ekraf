@@ -1,5 +1,6 @@
 """GET /api/chart/<type> — return chart data for frontend Plotly.js."""
 from flask import jsonify, request
+from flask_login import current_user
 
 from api import api_bp
 from config import DB_PATH, KECAMATAN_LIST
@@ -16,7 +17,7 @@ def _get_filtered():
         kecamatan_list=request.args.getlist("kecamatan") or None,
         kelurahan_list=request.args.getlist("kelurahan") or None,
         subsektor_list=request.args.getlist("subsektor") or None,
-        search_text=request.args.get("search", ""),
+        search_text=request.args.get("search", "") if current_user.is_authenticated else "",
     )
 
 

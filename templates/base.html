@@ -3,6 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>{% block title %}Dashboard Spasial Ekonomi Kreatif Kota Malang{% endblock %}</title>
 
     <!-- Google Fonts (Inter) -->
@@ -24,31 +25,41 @@
     <!-- Custom CSS -->
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
 </head>
-<body>
+<body class="dashboard-body">
+
+    <a class="skip-link" href="#main-content">Lewati ke konten utama</a>
 
     <!-- Sidebar -->
-    <aside class="sidebar" id="sidebar">
+    <aside class="sidebar" id="sidebar" aria-label="Navigasi utama">
         <div class="sidebar-brand">
-            <div class="d-flex align-items-center">
+            <div class="d-flex align-items-center flex-grow-1">
                 <img src="{{ url_for('static', filename='img/logo.svg') }}" class="brand-logo" alt="Logo">
                 <div class="brand-text">
                     <h5 class="brand-title">BAPPEDA</h5>
                     <span class="brand-subtitle">Kota Malang</span>
                 </div>
             </div>
+            <button class="sidebar-close d-lg-none" id="sidebar-close" type="button" aria-label="Tutup menu navigasi">
+                <i class="bi bi-x-lg" aria-hidden="true"></i>
+            </button>
         </div>
 
         <div class="sidebar-menu">
-            <a href="#" class="menu-item active" data-target="overview-page">
+            <div id="auth-area" class="px-3 mb-3">
+                <a href="/login" class="btn btn-outline-light btn-sm w-100">
+                    <i class="bi bi-lock me-1"></i> Login
+                </a>
+            </div>
+            <a href="#" class="menu-item active" data-target="overview-page" aria-current="page">
                 <i class="bi bi-grid-fill"></i> Overview
             </a>
-            <a href="#" class="menu-item" data-target="dbscan-page">
+            <a href="#" class="menu-item auth-logged-in" data-target="dbscan-page" style="display:none;">
                 <i class="bi bi-geo-fill"></i> Clustering DBSCAN
             </a>
-            <a href="#" class="menu-item" data-target="table-page">
+            <a href="#" class="menu-item auth-logged-in" data-target="table-page" style="display:none;">
                 <i class="bi bi-table"></i> Tabel Data
             </a>
-            <a href="#" class="menu-item" data-target="manage-page">
+            <a href="#" class="menu-item auth-operator-only" data-target="manage-page" style="display:none;">
                 <i class="bi bi-sliders"></i> Kelola Data
             </a>
             <a href="#" class="menu-item" data-target="tentang-page">
@@ -86,90 +97,106 @@
         </div>
     </aside>
 
+    <button class="sidebar-backdrop" id="sidebar-backdrop" type="button" aria-label="Tutup menu navigasi" tabindex="-1"></button>
+
     <!-- Main Content Panel -->
-    <main class="main-content">
+    <main class="main-content" id="main-content">
         <!-- Top Header -->
         <div class="top-header">
-            <div class="d-flex align-items-center">
-                <button class="btn btn-outline-secondary d-lg-none me-3" id="sidebar-toggle">
-                    <i class="bi bi-list"></i>
+            <div class="header-identity">
+                <button class="icon-button d-lg-none" id="sidebar-toggle" type="button" aria-controls="sidebar" aria-expanded="false" aria-label="Buka menu navigasi">
+                    <i class="bi bi-list" aria-hidden="true"></i>
                 </button>
-                <div>
-                    <h4 class="mb-0 fw-extrabold" style="font-weight: 800; color: #0f172a;">Dashboard Ekonomi Kreatif Kota Malang</h4>
-                    <p class="text-muted mb-0" style="font-size: 0.85rem;">Pemetaan dan Analisis Spasial Pelaku Ekonomi Kreatif (DBSCAN Clustering)</p>
+                <div class="header-copy">
+                    <h1>Dashboard Ekonomi Kreatif</h1>
+                    <p>Pemetaan dan analisis spasial pelaku ekraf Kota Malang</p>
                 </div>
             </div>
-            <div class="d-flex align-items-center gap-3">
+            <div class="header-actions">
                 <div class="text-end d-none d-md-block">
-                    <span class="badge bg-light text-dark border p-2" id="live-time-badge">
+                    <span class="time-badge" id="live-time-badge">
                         <i class="bi bi-calendar3 me-1 text-primary"></i> Loading...
                     </span>
                 </div>
-                <button class="btn btn-primary d-flex align-items-center gap-2 shadow-sm rounded-pill px-3" id="btn-refresh-data">
-                    <i class="bi bi-arrow-clockwise"></i> Refresh Data
+                <button class="btn btn-primary header-refresh" id="btn-refresh-data" type="button">
+                    <i class="bi bi-arrow-clockwise" aria-hidden="true"></i>
+                    <span>Refresh Data</span>
                 </button>
             </div>
         </div>
 
         <!-- Global Filter -->
-        <div class="custom-card p-4 mb-4" id="filter-card">
-            <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
-                <div class="d-flex align-items-center gap-2">
-                    <i class="bi bi-funnel text-primary fs-5"></i>
-                    <h5 class="mb-0 fw-bold">Filter Data Pelaku Ekraf</h5>
+        <section class="custom-card filter-card mb-4" id="filter-card" aria-labelledby="filter-title">
+            <div class="filter-card-header">
+                <div class="filter-heading">
+                    <span class="section-icon" aria-hidden="true"><i class="bi bi-funnel"></i></span>
+                    <div>
+                        <h2 id="filter-title">Filter Data</h2>
+                        <p class="d-none d-sm-block">Persempit data berdasarkan wilayah, subsektor, atau nama</p>
+                    </div>
                 </div>
-                <span id="filter-status-badge" class="badge-active-filters">
-                    Menampilkan <strong id="active-count">0</strong> dari <strong id="total-count">0</strong> data pelaku
-                </span>
+                <div class="filter-summary">
+                    <span id="filter-status-badge" class="badge-active-filters" aria-live="polite">
+                        <span class="status-dot" aria-hidden="true"></span>
+                        <span><strong id="active-count">0</strong> dari <strong id="total-count">0</strong> data</span>
+                    </span>
+                    <button class="filter-toggle d-lg-none" type="button" data-bs-toggle="collapse" data-bs-target="#filter-body" aria-expanded="false" aria-controls="filter-body">
+                        <span>Atur filter</span><i class="bi bi-chevron-down" aria-hidden="true"></i>
+                    </button>
+                </div>
             </div>
-            <div class="row g-3">
-                <div class="col-12 col-md-4 col-lg-2">
-                    <label class="form-label text-muted fw-bold" style="font-size: 0.75rem;">KECAMATAN <small class="fw-normal">(multi)</small></label>
-                    <select class="form-select rounded-3" id="filter-kecamatan">
-                        <option value="">Semua Kecamatan</option>
-                    </select>
-                </div>
-                <div class="col-12 col-md-4 col-lg-3">
-                    <label class="form-label text-muted fw-bold" style="font-size: 0.75rem;">KELURAHAN <small class="fw-normal">(multi)</small></label>
-                    <select class="form-select rounded-3" id="filter-kelurahan">
-                        <option value="">Semua Kelurahan</option>
-                    </select>
-                </div>
-                <div class="col-12 col-md-4 col-lg-3">
-                    <label class="form-label text-muted fw-bold" style="font-size: 0.75rem;">SUBSEKTOR EKRAF <small class="fw-normal">(multi)</small></label>
-                    <select class="form-select rounded-3" id="filter-subsektor">
-                        <option value="">Semua Subsektor</option>
-                    </select>
-                </div>
-                <div class="col-12 col-md-8 col-lg-2">
-                    <label class="form-label text-muted fw-bold" style="font-size: 0.75rem;">CARI NARASUMBER / USAHA</label>
-                    <input type="text" class="form-control rounded-3" id="filter-search" placeholder="Ketik nama...">
-                </div>
-                <div class="col-12 col-md-4 col-lg-2 d-flex flex-column justify-content-end">
-                    <label class="form-label d-none d-lg-block">&nbsp;</label>
-                    <div class="d-flex gap-2 w-100">
-                        <button class="btn btn-outline-secondary w-50 rounded-3 py-2" id="btn-reset-filter">
-                            <i class="bi bi-x-circle"></i> Reset
-                        </button>
-                        <button class="btn btn-primary w-50 rounded-3 py-2" id="btn-apply-filter">
-                            <i class="bi bi-check-circle"></i> Terapkan
-                        </button>
+            <div class="collapse filter-body" id="filter-body">
+                <div class="filter-card-body">
+                    <div class="filter-grid">
+                        <div class="filter-field auth-logged-in" style="display:none;">
+                            <label class="form-label" for="filter-kecamatan">Kecamatan <small>(bisa lebih dari satu)</small></label>
+                            <select class="form-select rounded-3" id="filter-kecamatan">
+                                <option value="">Semua Kecamatan</option>
+                            </select>
+                        </div>
+                        <div class="filter-field filter-field-wide">
+                            <label class="form-label" for="filter-kelurahan">Kelurahan <small>(bisa lebih dari satu)</small></label>
+                            <select class="form-select rounded-3" id="filter-kelurahan">
+                                <option value="">Semua Kelurahan</option>
+                            </select>
+                        </div>
+                        <div class="filter-field filter-field-wide">
+                            <label class="form-label" for="filter-subsektor">Subsektor ekraf <small>(bisa lebih dari satu)</small></label>
+                            <select class="form-select rounded-3" id="filter-subsektor">
+                                <option value="">Semua Subsektor</option>
+                            </select>
+                        </div>
+                        <div class="filter-field">
+                            <label class="form-label" for="filter-search">Nama narasumber / usaha</label>
+                            <div class="search-field">
+                                <i class="bi bi-search" aria-hidden="true"></i>
+                                <input type="search" class="form-control rounded-3" id="filter-search" placeholder="Cari nama..." autocomplete="off">
+                            </div>
+                        </div>
+                        <div class="filter-actions">
+                            <button class="btn btn-outline-secondary" id="btn-reset-filter" type="button">
+                                <i class="bi bi-arrow-counterclockwise" aria-hidden="true"></i><span>Reset</span>
+                            </button>
+                            <button class="btn btn-primary" id="btn-apply-filter" type="button">
+                                <i class="bi bi-check2" aria-hidden="true"></i><span>Terapkan</span>
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>
-        </div>
+        </section>
 
         {% block content %}{% endblock %}
 
         <!-- Footer -->
-        <div class="d-flex justify-content-between text-muted border-top pt-3 mt-5" style="font-size: 0.8rem;">
-            <span>© 2025 BAPPEDA Kota Malang. Semua hak dilindungi.</span>
-            <span>Dashboard Ekonomi Kreatif Kota Malang v1.0.0</span>
-        </div>
+        <footer class="app-footer">
+            <span>© 2026 BAPPEDA Kota Malang</span>
+            <span>Dashboard Ekonomi Kreatif v1.0.0</span>
+        </footer>
     </main>
 
     <!-- Toast Notification -->
-    <div id="custom-toast" class="custom-toast">
+    <div id="custom-toast" class="custom-toast" role="status" aria-live="polite" aria-atomic="true">
         <div class="d-flex align-items-center gap-2">
             <i class="bi bi-check-circle-fill text-success fs-5"></i>
             <div>
@@ -193,6 +220,8 @@
 
     <!-- Tom Select JS -->
     <script src="https://cdn.jsdelivr.net/npm/tom-select@2.3.1/dist/js/tom-select.complete.min.js"></script>
+    <!-- Auth JS -->
+    <script src="{{ url_for('static', filename='js/auth.js') }}"></script>
     <!-- App JS -->
     <script src="{{ url_for('static', filename='js/app.js') }}"></script>
     {% block scripts %}{% endblock %}

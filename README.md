@@ -13,8 +13,9 @@ Aplikasi ini dirancang dengan gaya **Modern Government Dashboard** bertema teran
 3. **Analisis Spasial DBSCAN**: Fitur pengelompokan wilayah (*clustering*) secara *real-time* berdasarkan koordinat geografis (latitude & longitude) menggunakan algoritma DBSCAN dengan parameter dinamis (`eps` dan `min_samples`). Menghasilkan peta klaster dan analisis persentase *noise*.
 4. **Statistik & Visualisasi**: Berbagai chart interaktif menggunakan **Plotly.js** untuk menunjukkan distribusi subsektor, kecamatan, kelurahan, dan kategori usaha.
 5. **Tabel Data Interaktif**: Pencarian, pengurutan (*sorting*), paginasi data menggunakan **DataTables**, serta fitur ekspor data ke Excel dan CSV.
-6. **Kelola Data (CRUD)**: Manajemen data pelaku ekraf (Tambah, Edit, Hapus) beserta fitur **Import Excel** untuk memperbarui database secara massal.
+6. **Kelola Data (CRUD)**: Manajemen data berbasis role, soft-delete/restore, audit log, dan import Excel melalui staging + preview sebelum commit.
 7. **Filter Global**: Penyaringan data berdasarkan Kecamatan, Kelurahan, Subsektor, Nama Narasumber, atau kata kunci lainnya yang berlaku di semua halaman.
+8. **Keamanan P0**: Dashboard publik teragregasi, login dengan session aman, CSRF, rate-limit login, CORS allowlist, serta backup/restore SQLite.
 
 ---
 
@@ -112,6 +113,12 @@ Pasang seluruh pustaka Python yang dibutuhkan:
 pip install -r requirements.txt
 ```
 
+Salin konfigurasi contoh, lalu ganti minimal `SECRET_KEY`:
+
+```bash
+cp .env.example .env
+```
+
 ### 4. Setup Data & Database (Penting)
 Repositori ini **tidak menyertakan database (`ekraf.db`) dan data Excel asli (`ekraf.xlsx`)** demi keamanan dan efisiensi ukuran repositori.
 
@@ -131,6 +138,22 @@ python app.py
 ```
 Setelah server berjalan, buka peramban (*browser*) Anda dan akses alamat:
 `http://localhost:5000`
+
+### 6. Buat Pengguna Internal
+
+Aplikasi tidak menyediakan akun atau password default. Buat admin pertama secara interaktif:
+
+```bash
+python scripts/manage_users.py create nama_admin --role admin
+```
+
+Panduan konfigurasi production, import, backup, dan restore tersedia di [SECURITY.md](SECURITY.md).
+
+### 7. Jalankan Test P0
+
+```bash
+python -m unittest discover -s tests -v
+```
 
 ---
 

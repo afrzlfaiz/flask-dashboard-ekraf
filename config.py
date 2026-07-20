@@ -1,11 +1,105 @@
 """
 Konstanta global untuk Dashboard Spasial Ekonomi Kreatif Kota Malang.
 Tema mengikuti DESIGN.md — "Spatial Creative Index" design system.
+
+Konfigurasi sensitif dibaca dari environment variables (.env).
 """
+import os
+from pathlib import Path
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+
+from dotenv import load_dotenv
+
+# ── Load .env ──────────────────────────────────────────────────
+load_dotenv()
+
+PROJECT_ROOT = Path(__file__).resolve().parent
+
+
+def _env_bool(name: str, default: bool = False) -> bool:
+    value = os.getenv(name)
+    if value is None:
+        return default
+    return value.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _resolve_path(value: str) -> str:
+    """Resolve project-relative configuration paths without changing URLs."""
+    if value.startswith("sqlite:///"):
+        value = value.removeprefix("sqlite:///")
+    path = Path(value)
+    return str(path if path.is_absolute() else PROJECT_ROOT / path)
+
+# ── Flask Core ─────────────────────────────────────────────────
+FLASK_ENV = os.getenv("FLASK_ENV", "production").strip().lower()
+IS_PRODUCTION = FLASK_ENV == "production"
+DEBUG = _env_bool("FLASK_DEBUG", False)
+SECRET_KEY = os.getenv("SECRET_KEY", "").strip()
+
+if not SECRET_KEY:
+    raise RuntimeError("SECRET_KEY wajib diisi melalui environment atau file .env.")
+if IS_PRODUCTION and (DEBUG or SECRET_KEY.startswith("change-me")):
+    raise RuntimeError("Konfigurasi production tidak aman: nonaktifkan debug dan gunakan SECRET_KEY acak.")
+
+SESSION_TIMEOUT_MINUTES = int(os.getenv("SESSION_TIMEOUT_MINUTES", "30"))
+SESSION_COOKIE_SECURE = _env_bool("SESSION_COOKIE_SECURE", IS_PRODUCTION)
+SESSION_COOKIE_SAMESITE = os.getenv("SESSION_COOKIE_SAMESITE", "Lax")
+BOOTSTRAP_ADMIN_USERNAME = os.getenv("BOOTSTRAP_ADMIN_USERNAME", "").strip()
+BOOTSTRAP_ADMIN_PASSWORD = os.getenv("BOOTSTRAP_ADMIN_PASSWORD", "")
+if not 1 <= SESSION_TIMEOUT_MINUTES <= 1440:
+    raise RuntimeError("SESSION_TIMEOUT_MINUTES harus berada pada rentang 1–1440 menit.")
+if SESSION_COOKIE_SAMESITE not in {"Lax", "Strict", "None"}:
+    raise RuntimeError("SESSION_COOKIE_SAMESITE harus bernilai Lax, Strict, atau None.")
+if IS_PRODUCTION and (len(SECRET_KEY) < 32 or not SESSION_COOKIE_SECURE):
+    raise RuntimeError("Production memerlukan SECRET_KEY minimal 32 karakter dan cookie sesi Secure.")
+
+# ── Server ─────────────────────────────────────────────────────
+HOST = os.getenv("HOST", "127.0.0.1")
+PORT = int(os.getenv("PORT", "5000"))
+APP_TIMEZONE = os.getenv("APP_TIMEZONE", "Asia/Jakarta").strip()
+try:
+    APP_TZINFO = ZoneInfo(APP_TIMEZONE)
+except ZoneInfoNotFoundError as error:
+    raise RuntimeError(
+        f"APP_TIMEZONE '{APP_TIMEZONE}' tidak valid. Gunakan nama IANA seperti Asia/Jakarta."
+    ) from error
 
 # ── Database ────────────────────────────────────────────────────
-DB_PATH = "data/ekraf.db"
-GEOJSON_DIR = "geojson"
+DB_PATH = _resolve_path(os.getenv("DATABASE_URL", "data/ekraf.db"))
+GEOJSON_DIR = _resolve_path(os.getenv("GEOJSON_DIR", "geojson"))
+BACKUP_DIR = _resolve_path(os.getenv("BACKUP_DIR", "backups"))
+LOG_DIR = _resolve_path(os.getenv("LOG_DIR", "logs"))
+
+# ── CORS ────────────────────────────────────────────────────────
+_origins_value = os.getenv("ALLOWED_ORIGINS", "").strip()
+if IS_PRODUCTION and not _origins_value:
+    raise RuntimeError("ALLOWED_ORIGINS wajib ditentukan pada environment production.")
+ALLOWED_ORIGINS = _origins_value or "http://localhost:5000,http://127.0.0.1:5000"
+CORS_SUPPORTS_CREDENTIALS = _env_bool("CORS_SUPPORTS_CREDENTIALS", False)
+if IS_PRODUCTION and "*" in {origin.strip() for origin in ALLOWED_ORIGINS.split(",")}:
+    raise RuntimeError("Wildcard CORS tidak diizinkan pada production.")
+
+# ── Upload ──────────────────────────────────────────────────────
+MAX_UPLOAD_SIZE_MB = int(os.getenv("MAX_UPLOAD_SIZE_MB", "10"))
+MAX_UPLOAD_ROWS = int(os.getenv("MAX_UPLOAD_ROWS", "5000"))
+MAX_UPLOAD_UNCOMPRESSED_MB = int(os.getenv("MAX_UPLOAD_UNCOMPRESSED_MB", "100"))
+if MAX_UPLOAD_SIZE_MB <= 0 or MAX_UPLOAD_ROWS <= 0 or MAX_UPLOAD_UNCOMPRESSED_MB <= 0:
+    raise RuntimeError("Batas ukuran upload dan jumlah baris harus lebih besar dari nol.")
+ALLOWED_UPLOAD_MIMES = {
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    "application/octet-stream",
+    "application/zip",
+    "application/x-zip-compressed",
+}
+
+# ── Backup ──────────────────────────────────────────────────────
+AUTO_BACKUP_ENABLED = _env_bool("AUTO_BACKUP_ENABLED", True)
+BACKUP_HOUR = int(os.getenv("BACKUP_HOUR", "2"))
+BACKUP_RETENTION_DAYS = int(os.getenv("BACKUP_RETENTION_DAYS", "30"))
+if not 0 <= BACKUP_HOUR <= 23 or BACKUP_RETENTION_DAYS <= 0:
+    raise RuntimeError("BACKUP_HOUR harus 0–23 dan retensi backup harus lebih besar dari nol.")
+if IS_PRODUCTION and not os.getenv("BACKUP_DIR", "").strip():
+    raise RuntimeError("BACKUP_DIR terpisah wajib ditentukan pada environment production.")
 
 # ── Kecamatan (urutan sesuai spesifikasi PROJECT.md) ───────────
 KECAMATAN_LIST = [

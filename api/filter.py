@@ -1,12 +1,12 @@
 """POST /api/filter — return filtered data + dropdown options."""
-import pandas as pd
 from flask import jsonify, request
+from flask_login import current_user
 
 from api import api_bp
 from config import DB_PATH
 from utils.data_loader import load_data
 from utils.filtering import apply_filters
-from utils.helper import get_kelurahan_options, row_to_dict
+from utils.helper import get_kelurahan_options
 
 
 @api_bp.route("/filter", methods=["POST"])
@@ -26,15 +26,10 @@ def filter_data():
         kelurahan_list = kelurahan_raw or []
 
     subsektor_list = body.get("subsektor", []) or None
-    search_text = body.get("search", "")
+    search_text = body.get("search", "") if current_user.is_authenticated else ""
 
     df, _ = load_data(DB_PATH)
     filtered = apply_filters(df, kecamatan_list or None, kelurahan_list or None, subsektor_list, search_text)
-
-    # Build row list for frontend
-    rows = []
-    for _, row in filtered.iterrows():
-        rows.append(row_to_dict(row))
 
     # Dropdown options — dynamic from actual data
     kelurahan_options = get_kelurahan_options(df, kecamatan_list or None)
@@ -42,7 +37,6 @@ def filter_data():
     dynamic_subsektor = sorted(df["Sub Sektor"].dropna().unique().tolist())
 
     return jsonify({
-        "data": rows,
         "total": len(filtered),
         "total_db": len(df),
         "options": {

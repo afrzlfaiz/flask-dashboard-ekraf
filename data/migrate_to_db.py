@@ -9,12 +9,15 @@ Atau dari folder data:
 - Buat / rebuild ekraf.db dari ekraf.xlsx
 """
 import sqlite3
+import sys
 from pathlib import Path
 
 import pandas as pd
 
 # Paths relatif terhadap folder data/
 DATA_DIR = Path(__file__).parent
+PROJECT_ROOT = DATA_DIR.parent
+sys.path.insert(0, str(PROJECT_ROOT))
 EXCEL_PATH = DATA_DIR / "ekraf.xlsx"
 DB_PATH = DATA_DIR / "ekraf.db"
 
@@ -43,7 +46,15 @@ conn.execute("""
         "Email" TEXT,
         "lat" REAL,
         "lon" REAL,
-        "Sheet" TEXT
+        "Sheet" TEXT,
+        is_active INTEGER NOT NULL DEFAULT 1,
+        deleted_at TEXT,
+        deleted_by INTEGER,
+        created_at TEXT,
+        created_by INTEGER,
+        updated_at TEXT,
+        updated_by INTEGER,
+        import_batch_id TEXT
     )
 """)
 
@@ -59,5 +70,10 @@ for sheet, df in sheets.items():
 
 conn.commit()
 conn.close()
+
+# Tambahkan tabel keamanan, audit, dan staging secara idempotent.
+from utils.database import initialize_database  # noqa: E402
+
+initialize_database(str(DB_PATH))
 
 print(f"\n✓ Total: {total} baris → {DB_PATH}")
