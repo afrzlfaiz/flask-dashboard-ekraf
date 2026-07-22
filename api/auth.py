@@ -23,10 +23,10 @@ def _is_rate_limited(username: str, ip_address: str) -> bool:
     conn = connect_db()
     try:
         count = conn.execute(
-            """SELECT COUNT(*) FROM login_attempts
-               WHERE username = ? AND ip_address = ? AND succeeded = 0 AND attempted_at >= ?""",
+            """SELECT COUNT(*) AS total FROM login_attempts
+               WHERE username = %s AND ip_address = %s AND succeeded = 0 AND attempted_at >= %s""",
             (username, ip_address, cutoff),
-        ).fetchone()[0]
+        ).fetchone()["total"]
         return count >= MAX_FAILED_ATTEMPTS
     finally:
         conn.close()
@@ -52,18 +52,18 @@ def auth_login():
     with transaction() as conn:
         row = conn.execute(
             """SELECT id, username, password_hash, role, is_active, must_change_password
-               FROM users WHERE username = ?""",
+               FROM users WHERE username = %s""",
             (username,),
         ).fetchone()
         valid = bool(
             row and row["is_active"] and check_password_hash(row["password_hash"], password)
         )
         conn.execute(
-            "INSERT INTO login_attempts (username, ip_address, succeeded, attempted_at) VALUES (?, ?, ?, ?)",
+            "INSERT INTO login_attempts (username, ip_address, succeeded, attempted_at) VALUES (%s, %s, %s, %s)",
             (username, ip_address, int(valid), utcnow()),
         )
         conn.execute(
-            "DELETE FROM login_attempts WHERE attempted_at < ?",
+            "DELETE FROM login_attempts WHERE attempted_at < %s",
             ((datetime.now().astimezone() - timedelta(days=1)).isoformat(timespec="seconds"),),
         )
 
@@ -74,7 +74,7 @@ def auth_login():
             )
             return jsonify({"success": False, "message": "Username atau password salah."}), 401
 
-        conn.execute("UPDATE users SET last_login_at = ?, updated_at = ? WHERE id = ?", (utcnow(), utcnow(), row["id"]))
+        conn.execute("UPDATE users SET last_login_at = %s, updated_at = %s WHERE id = %s", (utcnow(), utcnow(), row["id"]))
         record_audit(
             conn, action="login", entity="auth", entity_id=row["id"], user_id=row["id"],
             ip_address=ip_address, request_id=getattr(g, "request_id", None),
@@ -139,7 +139,7 @@ def list_users():
     conn = connect_db()
     try:
         rows = conn.execute(
-            "SELECT id, username, role, is_active, created_at, last_login_at FROM users ORDER BY id"
+            "SELECT id, username, role, is_active, created_at, last_login_at FROM users WHERE is_active = 1 ORDER BY id"
         ).fetchall()
         return jsonify({"success": True, "users": [dict(r) for r in rows]})
     finally:
@@ -165,7 +165,7 @@ def create_user():
         return jsonify({"success": False, "message": "Password minimal 8 karakter."}), 400
 
     with transaction() as conn:
-        exists = conn.execute("SELECT 1 FROM users WHERE username = ?", (username,)).fetchone()
+        exists = conn.execute("SELECT 1 FROM users WHERE username = %s", (username,)).fetchone()
         if exists:
             return jsonify({"success": False, "message": "Username sudah digunakan."}), 409
 
@@ -173,7 +173,7 @@ def create_user():
         now = utcnow()
         conn.execute(
             """INSERT INTO users (username, password_hash, role, is_active, created_at, must_change_password)
-               VALUES (?, ?, 'operator', 1, ?, 0)""",
+               VALUES (%s, %s, 'operator', 1, %s, 0)""",
             (username, password_hash, now),
         )
         record_audit(
@@ -198,11 +198,17 @@ def delete_user(user_id):
         return jsonify({"success": False, "message": "Tidak bisa menghapus akun sendiri."}), 400
 
     with transaction() as conn:
-        row = conn.execute("SELECT id, username FROM users WHERE id = ?", (user_id,)).fetchone()
-        if not row:
+        row = conn.execute(
+            "SELECT id, username, role, is_active FROM users WHERE id = %s", (user_id,)
+        ).fetchone()
+        if not row or not row["is_active"]:
             return jsonify({"success": False, "message": "User tidak ditemukan."}), 404
+        if row["role"] != "operator":
+            return jsonify({"success": False, "message": "Hanya user operator yang dapat dihapus."}), 400
 
-        conn.execute("DELETE FROM users WHERE id = ?", (user_id,))
+        conn.execute(
+            "UPDATE users SET is_active = 0, updated_at = %s WHERE id = %s", (utcnow(), user_id)
+        )
         record_audit(
             conn, action="user_deleted", entity="users", entity_id=user_id,
             new_value={"username": row["username"]},

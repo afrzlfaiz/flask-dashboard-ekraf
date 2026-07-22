@@ -1,15 +1,17 @@
-"""SQLite connection, idempotent P0 schema migration, and audit helpers."""
+"""PostgreSQL connection, schema migration, and audit helpers."""
 
 from __future__ import annotations
 
 import json
-import sqlite3
 from contextlib import contextmanager
 from datetime import datetime
-from pathlib import Path
 from typing import Any, Iterator
 
-from config import DB_PATH
+import psycopg
+from psycopg import sql
+from psycopg.rows import dict_row
+
+from config import DATABASE_SCHEMA, DATABASE_URL
 
 
 PELAKU_COLUMNS = {
@@ -34,21 +36,18 @@ def utcnow() -> str:
     return datetime.now().astimezone().isoformat(timespec="seconds")
 
 
-def connect_db(path: str | None = None) -> sqlite3.Connection:
-    db_path = path or DB_PATH
-    Path(db_path).parent.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(db_path, timeout=15)
-    conn.row_factory = sqlite3.Row
-    conn.execute("PRAGMA foreign_keys = ON")
-    conn.execute("PRAGMA busy_timeout = 15000")
+def connect_db(database_url: str | None = None) -> psycopg.Connection:
+    conn = psycopg.connect(
+        database_url or DATABASE_URL, row_factory=dict_row, connect_timeout=15
+    )
+    conn.execute(sql.SQL("SET search_path TO {}").format(sql.Identifier(DATABASE_SCHEMA)))
     return conn
 
 
 @contextmanager
-def transaction(path: str | None = None) -> Iterator[sqlite3.Connection]:
-    conn = connect_db(path)
+def transaction(database_url: str | None = None) -> Iterator[psycopg.Connection]:
+    conn = connect_db(database_url)
     try:
-        conn.execute("BEGIN IMMEDIATE")
         yield conn
         conn.commit()
     except Exception:
@@ -58,32 +57,36 @@ def transaction(path: str | None = None) -> Iterator[sqlite3.Connection]:
         conn.close()
 
 
-def _table_exists(conn: sqlite3.Connection, table: str) -> bool:
+def _table_exists(conn: psycopg.Connection, table: str) -> bool:
     row = conn.execute(
-        "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?", (table,)
+        "SELECT 1 FROM information_schema.tables "
+        "WHERE table_schema = current_schema() AND table_name = %s", (table,)
     ).fetchone()
     return row is not None
 
 
-def _column_names(conn: sqlite3.Connection, table: str) -> set[str]:
-    return {row[1] for row in conn.execute(f'PRAGMA table_info("{table}")').fetchall()}
+def _column_names(conn: psycopg.Connection, table: str) -> set[str]:
+    rows = conn.execute(
+        "SELECT column_name FROM information_schema.columns "
+        "WHERE table_schema = current_schema() AND table_name = %s", (table,)
+    ).fetchall()
+    return {row["column_name"] for row in rows}
 
 
-def _ensure_columns(conn: sqlite3.Connection, table: str, columns: dict[str, str]) -> None:
+def _ensure_columns(conn: psycopg.Connection, table: str, columns: dict[str, str]) -> None:
     existing = _column_names(conn, table)
     for name, definition in columns.items():
         if name not in existing:
             conn.execute(f'ALTER TABLE "{table}" ADD COLUMN "{name}" {definition}')
 
 
-def initialize_database(path: str | None = None) -> None:
-    """Create or upgrade the SQLite schema without discarding existing records."""
-    db_path = path or DB_PATH
-    with transaction(db_path) as conn:
+def initialize_database(database_url: str | None = None) -> None:
+    """Create or upgrade the schema without discarding existing records."""
+    with transaction(database_url) as conn:
         if not _table_exists(conn, "pelaku_ekraf"):
-            conn.execute("""
+            conn.execute(f"""
                 CREATE TABLE pelaku_ekraf (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    id BIGSERIAL PRIMARY KEY,
                     "Nama Narasumber" TEXT,
                     "Nama Usaha" TEXT,
                     "Alamat" TEXT,
@@ -101,18 +104,18 @@ def initialize_database(path: str | None = None) -> None:
                     deleted_at TEXT,
                     deleted_by INTEGER,
                     created_at TEXT,
-                    created_by INTEGER,
+                    created_by BIGINT,
                     updated_at TEXT,
-                    updated_by INTEGER,
+                    updated_by BIGINT,
                     import_batch_id TEXT
                 )
             """)
         else:
             _ensure_columns(conn, "pelaku_ekraf", PELAKU_COLUMNS)
 
-        conn.execute("""
+        conn.execute(f"""
             CREATE TABLE IF NOT EXISTS users (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                id BIGSERIAL PRIMARY KEY,
                 username TEXT UNIQUE NOT NULL,
                 password_hash TEXT NOT NULL,
                 role TEXT NOT NULL DEFAULT 'viewer',
@@ -125,10 +128,10 @@ def initialize_database(path: str | None = None) -> None:
         """)
         _ensure_columns(conn, "users", USER_COLUMNS)
 
-        conn.execute("""
+        conn.execute(f"""
             CREATE TABLE IF NOT EXISTS audit_logs (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                user_id INTEGER,
+                id BIGSERIAL PRIMARY KEY,
+                user_id BIGINT,
                 action TEXT NOT NULL,
                 entity TEXT NOT NULL,
                 entity_id TEXT,
@@ -140,48 +143,47 @@ def initialize_database(path: str | None = None) -> None:
                 FOREIGN KEY (user_id) REFERENCES users(id)
             )
         """)
-        conn.execute("""
+        conn.execute(f"""
             CREATE TABLE IF NOT EXISTS login_attempts (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                id BIGSERIAL PRIMARY KEY,
                 username TEXT NOT NULL,
                 ip_address TEXT NOT NULL,
                 succeeded INTEGER NOT NULL DEFAULT 0,
                 attempted_at TEXT NOT NULL
             )
         """)
-        conn.execute("""
+        conn.execute(f"""
             CREATE TABLE IF NOT EXISTS import_batches (
                 id TEXT PRIMARY KEY,
                 filename TEXT NOT NULL,
                 file_sha256 TEXT NOT NULL,
-                uploaded_by INTEGER NOT NULL,
+                uploaded_by BIGINT NOT NULL,
                 status TEXT NOT NULL,
                 total_rows INTEGER NOT NULL DEFAULT 0,
                 valid_rows INTEGER NOT NULL DEFAULT 0,
                 error_rows INTEGER NOT NULL DEFAULT 0,
                 duplicate_rows INTEGER NOT NULL DEFAULT 0,
                 summary_json TEXT,
-                backup_path TEXT,
                 created_at TEXT NOT NULL,
                 committed_at TEXT,
-                committed_by INTEGER,
+                committed_by BIGINT,
                 rolled_back_at TEXT,
-                rolled_back_by INTEGER,
+                rolled_back_by BIGINT,
                 FOREIGN KEY (uploaded_by) REFERENCES users(id),
                 FOREIGN KEY (committed_by) REFERENCES users(id),
                 FOREIGN KEY (rolled_back_by) REFERENCES users(id)
             )
         """)
-        conn.execute("""
+        conn.execute(f"""
             CREATE TABLE IF NOT EXISTS import_staging (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                id BIGSERIAL PRIMARY KEY,
                 batch_id TEXT NOT NULL,
                 row_number INTEGER NOT NULL,
                 data_json TEXT NOT NULL,
                 validation_status TEXT NOT NULL,
                 errors_json TEXT,
-                duplicate_of INTEGER,
-                committed_record_id INTEGER,
+                duplicate_of BIGINT,
+                committed_record_id BIGINT,
                 created_at TEXT NOT NULL,
                 FOREIGN KEY (batch_id) REFERENCES import_batches(id) ON DELETE CASCADE
             )
@@ -189,22 +191,23 @@ def initialize_database(path: str | None = None) -> None:
 
         now = utcnow()
         conn.execute(
-            "UPDATE pelaku_ekraf SET created_at = ? WHERE created_at IS NULL", (now,)
+            "UPDATE pelaku_ekraf SET created_at = %s WHERE created_at IS NULL", (now,)
         )
         conn.execute(
-            "UPDATE users SET created_at = ? WHERE created_at IS NULL OR created_at = ''", (now,)
+            "UPDATE users SET created_at = %s WHERE created_at IS NULL OR created_at = ''", (now,)
         )
-        conn.executescript("""
-            CREATE INDEX IF NOT EXISTS idx_pelaku_active ON pelaku_ekraf(is_active);
-            CREATE INDEX IF NOT EXISTS idx_pelaku_active_id ON pelaku_ekraf(is_active, id);
-            CREATE INDEX IF NOT EXISTS idx_pelaku_active_kecamatan ON pelaku_ekraf(is_active, "Kecamatan");
-            CREATE INDEX IF NOT EXISTS idx_pelaku_active_kelurahan ON pelaku_ekraf(is_active, "Kelurahan");
-            CREATE INDEX IF NOT EXISTS idx_pelaku_active_subsektor ON pelaku_ekraf(is_active, "Sub Sektor");
-            CREATE INDEX IF NOT EXISTS idx_pelaku_import_batch ON pelaku_ekraf(import_batch_id);
-            CREATE INDEX IF NOT EXISTS idx_audit_created ON audit_logs(created_at);
-            CREATE INDEX IF NOT EXISTS idx_login_attempt ON login_attempts(username, ip_address, attempted_at);
-            CREATE INDEX IF NOT EXISTS idx_staging_batch ON import_staging(batch_id, validation_status);
-        """)
+        for statement in (
+            "CREATE INDEX IF NOT EXISTS idx_pelaku_active ON pelaku_ekraf(is_active)",
+            "CREATE INDEX IF NOT EXISTS idx_pelaku_active_id ON pelaku_ekraf(is_active, id)",
+            'CREATE INDEX IF NOT EXISTS idx_pelaku_active_kecamatan ON pelaku_ekraf(is_active, "Kecamatan")',
+            'CREATE INDEX IF NOT EXISTS idx_pelaku_active_kelurahan ON pelaku_ekraf(is_active, "Kelurahan")',
+            'CREATE INDEX IF NOT EXISTS idx_pelaku_active_subsektor ON pelaku_ekraf(is_active, "Sub Sektor")',
+            "CREATE INDEX IF NOT EXISTS idx_pelaku_import_batch ON pelaku_ekraf(import_batch_id)",
+            "CREATE INDEX IF NOT EXISTS idx_audit_created ON audit_logs(created_at)",
+            "CREATE INDEX IF NOT EXISTS idx_login_attempt ON login_attempts(username, ip_address, attempted_at)",
+            "CREATE INDEX IF NOT EXISTS idx_staging_batch ON import_staging(batch_id, validation_status)",
+        ):
+            conn.execute(statement)
 
 
 def _json_value(value: Any) -> str | None:
@@ -214,7 +217,7 @@ def _json_value(value: Any) -> str | None:
 
 
 def record_audit(
-    conn: sqlite3.Connection,
+    conn: psycopg.Connection,
     *,
     action: str,
     entity: str,
@@ -230,7 +233,7 @@ def record_audit(
         INSERT INTO audit_logs
             (user_id, action, entity, entity_id, old_value, new_value,
              ip_address, request_id, created_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
         """,
         (
             user_id,
@@ -246,5 +249,5 @@ def record_audit(
     )
 
 
-def row_as_dict(row: sqlite3.Row | None) -> dict[str, Any] | None:
+def row_as_dict(row) -> dict[str, Any] | None:
     return dict(row) if row is not None else None

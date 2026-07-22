@@ -1,6 +1,6 @@
 # Dashboard Spasial Ekonomi Kreatif Kota Malang
 
-Dashboard web interaktif untuk visualisasi dan analisis spasial persebaran pelaku Ekonomi Kreatif (Ekraf) di Kota Malang. Aplikasi ini dibangun menggunakan **Flask** sebagai backend, **SQLite** sebagai database, dan visualisasi spasial interaktif menggunakan **Leaflet.js** serta analisis clustering menggunakan algoritma **DBSCAN (scikit-learn)**.
+Dashboard web interaktif untuk visualisasi dan analisis spasial persebaran pelaku Ekonomi Kreatif (Ekraf) di Kota Malang. Aplikasi ini dibangun menggunakan **Flask** sebagai backend, **PostgreSQL Supabase** sebagai database, dan visualisasi spasial interaktif menggunakan **Leaflet.js** serta analisis clustering menggunakan algoritma **DBSCAN (scikit-learn)**.
 
 Aplikasi ini dirancang dengan gaya **Modern Government Dashboard** bertema terang (*light theme*), mengutamakan *whitespace*, sudut melengkung (*rounded corners*), bayangan lembut (*soft shadows*), serta tata letak yang responsif.
 
@@ -15,13 +15,13 @@ Aplikasi ini dirancang dengan gaya **Modern Government Dashboard** bertema teran
 5. **Tabel Data Interaktif**: Pencarian, pengurutan (*sorting*), paginasi data menggunakan **DataTables**, serta fitur ekspor data ke Excel dan CSV.
 6. **Kelola Data (CRUD)**: Manajemen data berbasis role, soft-delete/restore, audit log, dan import Excel melalui staging + preview sebelum commit.
 7. **Filter Global**: Penyaringan data berdasarkan Kecamatan, Kelurahan, Subsektor, Nama Narasumber, atau kata kunci lainnya yang berlaku di semua halaman.
-8. **Keamanan P0**: Dashboard publik teragregasi, login dengan session aman, CSRF, rate-limit login, CORS allowlist, serta backup/restore SQLite.
+8. **Keamanan P0**: Dashboard publik teragregasi, login dengan session aman, CSRF, rate-limit login, CORS allowlist, dan audit log.
 
 ---
 
 ## 🛠️ Stack Teknologi
 
-* **Backend**: Python 3.x, Flask, SQLite3
+* **Backend**: Python 3.x, Flask, PostgreSQL Supabase
 * **Frontend**: HTML5, CSS3, JavaScript (ES6), Bootstrap 5, Bootstrap Icons
 * **Library Peta & Visualisasi**: Leaflet.js (dengan Leaflet.markercluster), Plotly.js
 * **Library Pengolahan Data**: Pandas, NumPy, Scikit-learn (untuk DBSCAN), Openpyxl (ekspor/impor Excel)
@@ -49,11 +49,6 @@ dashboard-ekraf/
 │   ├── filter.py         # API untuk memproses data filter global
 │   ├── table.py          # API untuk data tabel utama
 │   └── upload.py         # API untuk upload berkas Excel
-│
-├── data/                 # Penyimpanan data (diabaikan dari Git)
-│   ├── ekraf.xlsx        # File sumber data asli (tidak disertakan di repositori)
-│   ├── ekraf.db          # Database SQLite hasil migrasi (tidak disertakan di repositori)
-│   └── migrate_to_db.py  # Skrip migrasi data dari Excel ke SQLite
 │
 ├── geojson/              # Batas wilayah administratif kecamatan
 │   ├── Kota Malang.geojson
@@ -113,23 +108,15 @@ Pasang seluruh pustaka Python yang dibutuhkan:
 pip install -r requirements.txt
 ```
 
-Salin konfigurasi contoh, lalu ganti minimal `SECRET_KEY`:
+Salin konfigurasi contoh, lalu isi `DATABASE_URL` Supabase dan `SECRET_KEY`:
 
 ```bash
 cp .env.example .env
 ```
 
-### 4. Setup Data & Database (Penting)
-Repositori ini **tidak menyertakan database (`ekraf.db`) dan data Excel asli (`ekraf.xlsx`)** demi keamanan dan efisiensi ukuran repositori.
+### 4. Setup Database
 
-Silakan ikuti langkah berikut untuk menginisialisasi data:
-1. Siapkan file data Excel Anda dan beri nama **`ekraf.xlsx`**.
-2. Letakkan file `ekraf.xlsx` tersebut ke dalam folder **`data/`** di proyek Anda.
-3. Jalankan skrip migrasi untuk membuat database SQLite secara otomatis:
-   ```bash
-   python data/migrate_to_db.py
-   ```
-   Skrip ini akan membuat file **`ekraf.db`** di dalam folder `data/` yang berisi tabel pelaku ekraf.
+Aplikasi membuat atau memperbarui tabel PostgreSQL secara otomatis saat startup. Data dikelola langsung melalui Supabase dan fitur impor XLSX di halaman Kelola Data.
 
 ### 5. Jalankan Aplikasi
 Jalankan server Flask lokal:
@@ -147,7 +134,7 @@ Aplikasi tidak menyediakan akun atau password default. Buat admin pertama secara
 python scripts/manage_users.py create nama_admin --role admin
 ```
 
-Panduan konfigurasi production, import, backup, dan restore tersedia di [SECURITY.md](SECURITY.md).
+Panduan konfigurasi production dan import tersedia di [SECURITY.md](SECURITY.md).
 
 ### 7. Jalankan Test P0
 

@@ -73,8 +73,8 @@ def _reference_values(conn):
         )
     subsektor = set(SUBSECTOR_COLORS)
     subsektor.update(
-        str(row[0]).strip() for row in conn.execute(
-            'SELECT DISTINCT "Sub Sektor" FROM pelaku_ekraf '
+        str(row["subsektor"]).strip() for row in conn.execute(
+            'SELECT DISTINCT "Sub Sektor" AS subsektor FROM pelaku_ekraf '
             'WHERE is_active = 1 AND "Sub Sektor" IS NOT NULL'
         )
     )
@@ -216,12 +216,12 @@ def crud_create():
         clean["created_by"] = current_user.id
         columns = list(clean)
         quoted = ", ".join(f'"{column}"' for column in columns)
-        placeholders = ", ".join("?" for _ in columns)
+        placeholders = ", ".join("%s" for _ in columns)
         cursor = conn.execute(
-            f"INSERT INTO pelaku_ekraf ({quoted}) VALUES ({placeholders})",
+            f"INSERT INTO pelaku_ekraf ({quoted}) VALUES ({placeholders}) RETURNING id",
             tuple(clean[column] for column in columns),
         )
-        new_id = cursor.lastrowid
+        new_id = cursor.fetchone()["id"]
         record_audit(
             conn, action="create", entity="pelaku_ekraf", entity_id=new_id,
             new_value=clean, **_audit_context(),
@@ -235,7 +235,7 @@ def crud_update(actor_id):
     body = request.get_json(silent=True) or {}
     with transaction() as conn:
         old = conn.execute(
-            "SELECT * FROM pelaku_ekraf WHERE id = ? AND is_active = 1", (actor_id,)
+            "SELECT * FROM pelaku_ekraf WHERE id = %s AND is_active = 1", (actor_id,)
         ).fetchone()
         if not old:
             return jsonify({"success": False, "message": "Data aktif tidak ditemukan."}), 404
@@ -244,9 +244,9 @@ def crud_update(actor_id):
             return jsonify({"success": False, "message": "Validasi gagal.", "errors": errors}), 422
         clean["updated_at"] = utcnow()
         clean["updated_by"] = current_user.id
-        set_clause = ", ".join(f'"{column}" = ?' for column in clean)
+        set_clause = ", ".join(f'"{column}" = %s' for column in clean)
         conn.execute(
-            f"UPDATE pelaku_ekraf SET {set_clause} WHERE id = ? AND is_active = 1",
+            f"UPDATE pelaku_ekraf SET {set_clause} WHERE id = %s AND is_active = 1",
             tuple(clean.values()) + (actor_id,),
         )
         record_audit(
@@ -261,13 +261,13 @@ def crud_update(actor_id):
 def crud_delete(actor_id):
     with transaction() as conn:
         old = conn.execute(
-            "SELECT * FROM pelaku_ekraf WHERE id = ? AND is_active = 1", (actor_id,)
+            "SELECT * FROM pelaku_ekraf WHERE id = %s AND is_active = 1", (actor_id,)
         ).fetchone()
         if not old:
             return jsonify({"success": False, "message": "Data aktif tidak ditemukan."}), 404
         conn.execute(
-            """UPDATE pelaku_ekraf SET is_active = 0, deleted_at = ?, deleted_by = ?,
-               updated_at = ?, updated_by = ? WHERE id = ?""",
+            """UPDATE pelaku_ekraf SET is_active = 0, deleted_at = %s, deleted_by = %s,
+               updated_at = %s, updated_by = %s WHERE id = %s""",
             (utcnow(), current_user.id, utcnow(), current_user.id, actor_id),
         )
         record_audit(
@@ -282,13 +282,13 @@ def crud_delete(actor_id):
 def crud_restore(actor_id):
     with transaction() as conn:
         old = conn.execute(
-            "SELECT * FROM pelaku_ekraf WHERE id = ? AND is_active = 0", (actor_id,)
+            "SELECT * FROM pelaku_ekraf WHERE id = %s AND is_active = 0", (actor_id,)
         ).fetchone()
         if not old:
             return jsonify({"success": False, "message": "Data nonaktif tidak ditemukan."}), 404
         conn.execute(
             """UPDATE pelaku_ekraf SET is_active = 1, deleted_at = NULL, deleted_by = NULL,
-               updated_at = ?, updated_by = ? WHERE id = ?""",
+               updated_at = %s, updated_by = %s WHERE id = %s""",
             (utcnow(), current_user.id, actor_id),
         )
         record_audit(
@@ -309,7 +309,7 @@ def crud_purge(actor_id):
         }), 400
     with transaction() as conn:
         old = conn.execute(
-            "SELECT * FROM pelaku_ekraf WHERE id = ? AND is_active = 0", (actor_id,)
+            "SELECT * FROM pelaku_ekraf WHERE id = %s AND is_active = 0", (actor_id,)
         ).fetchone()
         if not old:
             return jsonify({"success": False, "message": "Hanya data nonaktif yang dapat dihapus permanen."}), 409
@@ -317,5 +317,5 @@ def crud_purge(actor_id):
             conn, action="purge", entity="pelaku_ekraf", entity_id=actor_id,
             old_value=row_as_dict(old), **_audit_context(),
         )
-        conn.execute("DELETE FROM pelaku_ekraf WHERE id = ?", (actor_id,))
+        conn.execute("DELETE FROM pelaku_ekraf WHERE id = %s", (actor_id,))
     return jsonify({"success": True, "message": "Data dihapus permanen melalui prosedur khusus."})

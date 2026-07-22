@@ -52,21 +52,21 @@ def main() -> None:
             conn.execute(
                 """INSERT INTO users
                    (username, password_hash, role, is_active, created_at, must_change_password)
-                   VALUES (?, ?, ?, 1, ?, 0)""",
+                   VALUES (%s, %s, %s, 1, %s, 0)""",
                 (args.username.strip(), generate_password_hash(password), args.role, utcnow()),
             )
         elif args.command == "reset-password":
             password = require_password()
             cursor = conn.execute(
-                """UPDATE users SET password_hash = ?, is_active = 1,
-                   must_change_password = 0, updated_at = ? WHERE username = ?""",
+                """UPDATE users SET password_hash = %s, is_active = 1,
+                   must_change_password = 0, updated_at = %s WHERE username = %s""",
                 (generate_password_hash(password), utcnow(), args.username),
             )
             if cursor.rowcount != 1:
                 raise SystemExit("Pengguna tidak ditemukan.")
         elif args.command == "disable":
             cursor = conn.execute(
-                "UPDATE users SET is_active = 0, updated_at = ? WHERE username = ?",
+                "UPDATE users SET is_active = 0, updated_at = %s WHERE username = %s",
                 (utcnow(), args.username),
             )
             if cursor.rowcount != 1:

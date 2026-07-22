@@ -3,7 +3,7 @@ from flask import jsonify, request
 from flask_login import current_user
 
 from api import api_bp
-from config import DB_PATH
+from config import DATABASE_URL
 from utils.data_loader import load_data
 from utils.filtering import apply_filters
 from utils.helper import get_kelurahan_options
@@ -28,7 +28,7 @@ def filter_data():
     subsektor_list = body.get("subsektor", []) or None
     search_text = body.get("search", "") if current_user.is_authenticated else ""
 
-    df, _ = load_data(DB_PATH)
+    df, _ = load_data(DATABASE_URL)
     filtered = apply_filters(df, kecamatan_list or None, kelurahan_list or None, subsektor_list, search_text)
 
     # Dropdown options — dynamic from actual data

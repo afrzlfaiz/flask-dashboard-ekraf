@@ -19,11 +19,10 @@ from api.crud import validate_actor_payload
 from auth import role_required
 from config import (
     ALLOWED_UPLOAD_MIMES,
-    DB_PATH,
+    DATABASE_URL,
     MAX_UPLOAD_ROWS,
     MAX_UPLOAD_UNCOMPRESSED_MB,
 )
-from utils.backup import create_backup
 from utils.data_loader import load_data
 from utils.database import connect_db, record_audit, transaction, utcnow
 from utils.filtering import apply_filters
@@ -90,7 +89,7 @@ def _spreadsheet_safe(value):
 
 
 def _batch_access(conn, batch_id: str):
-    batch = conn.execute("SELECT * FROM import_batches WHERE id = ?", (batch_id,)).fetchone()
+    batch = conn.execute("SELECT * FROM import_batches WHERE id = %s", (batch_id,)).fetchone()
     if not batch:
         return None, (jsonify({"success": False, "message": "Batch import tidak ditemukan."}), 404)
     if int(batch["uploaded_by"]) != int(current_user.id) and not current_user.has_role("admin"):
@@ -116,7 +115,7 @@ def _serialize_batch(batch) -> dict:
 def _preview_rows(conn, batch_id: str, limit: int = 50) -> list[dict]:
     rows = conn.execute(
         """SELECT row_number, data_json, validation_status, errors_json, duplicate_of
-           FROM import_staging WHERE batch_id = ? ORDER BY row_number LIMIT ?""",
+           FROM import_staging WHERE batch_id = %s ORDER BY row_number LIMIT %s""",
         (batch_id, limit),
     ).fetchall()
     result = []
@@ -210,7 +209,7 @@ def upload_excel():
         conn.execute(
             """INSERT INTO import_batches
                (id, filename, file_sha256, uploaded_by, status, total_rows, created_at)
-               VALUES (?, ?, ?, ?, 'preview', ?, ?)""",
+               VALUES (%s, %s, %s, %s, 'preview', %s, %s)""",
             (batch_id, filename, digest, current_user.id, len(dataframe), now),
         )
         for index, series in dataframe.iterrows():
@@ -235,15 +234,15 @@ def upload_excel():
                 """INSERT INTO import_staging
                    (batch_id, row_number, data_json, validation_status, errors_json,
                     duplicate_of, created_at)
-                   VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                   VALUES (%s, %s, %s, %s, %s, %s, %s)""",
                 (
                     batch_id, index + 2, json.dumps(clean, ensure_ascii=False, default=str),
                     status, json.dumps(errors, ensure_ascii=False), duplicate_of, now,
                 ),
             )
         conn.execute(
-            """UPDATE import_batches SET valid_rows = ?, error_rows = ?, duplicate_rows = ?,
-               summary_json = ? WHERE id = ?""",
+            """UPDATE import_batches SET valid_rows = %s, error_rows = %s, duplicate_rows = %s,
+               summary_json = %s WHERE id = %s""",
             (
                 counts["valid"], counts["error"], counts["duplicate"],
                 json.dumps(counts), batch_id,
@@ -253,7 +252,7 @@ def upload_excel():
             conn, action="upload_preview", entity="import_batch", entity_id=batch_id,
             new_value={"filename": filename, **counts}, **_audit_context(),
         )
-        batch = conn.execute("SELECT * FROM import_batches WHERE id = ?", (batch_id,)).fetchone()
+        batch = conn.execute("SELECT * FROM import_batches WHERE id = %s", (batch_id,)).fetchone()
         preview = _preview_rows(conn, batch_id)
 
     return jsonify({
@@ -294,14 +293,13 @@ def import_commit(batch_id):
     finally:
         access_conn.close()
 
-    backup_path = create_backup(f"pre-import-{batch_id[:8]}")
     with transaction() as conn:
-        batch = conn.execute("SELECT * FROM import_batches WHERE id = ?", (batch_id,)).fetchone()
+        batch = conn.execute("SELECT * FROM import_batches WHERE id = %s", (batch_id,)).fetchone()
         if not batch or batch["status"] != "preview":
             return jsonify({"success": False, "message": "Status batch berubah. Muat ulang preview."}), 409
         staged = conn.execute(
             """SELECT id, data_json FROM import_staging
-               WHERE batch_id = ? AND validation_status = 'valid' ORDER BY row_number""",
+               WHERE batch_id = %s AND validation_status = 'valid' ORDER BY row_number""",
             (batch_id,),
         ).fetchall()
         inserted = 0
@@ -315,24 +313,25 @@ def import_commit(batch_id):
             })
             columns = list(data)
             quoted = ", ".join(f'"{column}"' for column in columns)
-            placeholders = ", ".join("?" for _ in columns)
+            placeholders = ", ".join("%s" for _ in columns)
             cursor = conn.execute(
-                f"INSERT INTO pelaku_ekraf ({quoted}) VALUES ({placeholders})",
+                f"INSERT INTO pelaku_ekraf ({quoted}) VALUES ({placeholders}) RETURNING id",
                 tuple(data[column] for column in columns),
             )
+            inserted_id = cursor.fetchone()["id"]
             conn.execute(
-                "UPDATE import_staging SET committed_record_id = ? WHERE id = ?",
-                (cursor.lastrowid, row["id"]),
+                "UPDATE import_staging SET committed_record_id = %s WHERE id = %s",
+                (inserted_id, row["id"]),
             )
             inserted += 1
         conn.execute(
-            """UPDATE import_batches SET status = 'committed', committed_at = ?,
-               committed_by = ?, backup_path = ? WHERE id = ?""",
-            (utcnow(), current_user.id, str(backup_path), batch_id),
+            """UPDATE import_batches SET status = 'committed', committed_at = %s,
+               committed_by = %s WHERE id = %s""",
+            (utcnow(), current_user.id, batch_id),
         )
         record_audit(
             conn, action="import_commit", entity="import_batch", entity_id=batch_id,
-            new_value={"inserted": inserted, "backup": backup_path.name}, **_audit_context(),
+            new_value={"inserted": inserted}, **_audit_context(),
         )
     return jsonify({
         "success": True,
@@ -352,7 +351,7 @@ def import_cancel(batch_id):
             return error
         if batch["status"] != "preview":
             return jsonify({"success": False, "message": "Hanya batch preview yang dapat dibatalkan."}), 409
-        conn.execute("UPDATE import_batches SET status = 'cancelled' WHERE id = ?", (batch_id,))
+        conn.execute("UPDATE import_batches SET status = 'cancelled' WHERE id = %s", (batch_id,))
         record_audit(
             conn, action="import_cancel", entity="import_batch", entity_id=batch_id,
             old_value=_serialize_batch(batch), **_audit_context(),
@@ -370,17 +369,17 @@ def import_rollback(batch_id):
         if batch["status"] != "committed":
             return jsonify({"success": False, "message": "Hanya batch committed yang dapat di-rollback."}), 409
         rows = conn.execute(
-            "SELECT id FROM pelaku_ekraf WHERE import_batch_id = ? AND is_active = 1", (batch_id,)
+            "SELECT id FROM pelaku_ekraf WHERE import_batch_id = %s AND is_active = 1", (batch_id,)
         ).fetchall()
         now = utcnow()
         conn.execute(
-            """UPDATE pelaku_ekraf SET is_active = 0, deleted_at = ?, deleted_by = ?,
-               updated_at = ?, updated_by = ? WHERE import_batch_id = ? AND is_active = 1""",
+            """UPDATE pelaku_ekraf SET is_active = 0, deleted_at = %s, deleted_by = %s,
+               updated_at = %s, updated_by = %s WHERE import_batch_id = %s AND is_active = 1""",
             (now, current_user.id, now, current_user.id, batch_id),
         )
         conn.execute(
-            """UPDATE import_batches SET status = 'rolled_back', rolled_back_at = ?,
-               rolled_back_by = ? WHERE id = ?""",
+            """UPDATE import_batches SET status = 'rolled_back', rolled_back_at = %s,
+               rolled_back_by = %s WHERE id = %s""",
             (now, current_user.id, batch_id),
         )
         record_audit(
@@ -400,7 +399,7 @@ def import_errors(batch_id):
             return error
         rows = conn.execute(
             """SELECT row_number, validation_status, errors_json, data_json
-               FROM import_staging WHERE batch_id = ? AND validation_status != 'valid'
+               FROM import_staging WHERE batch_id = %s AND validation_status != 'valid'
                ORDER BY row_number""",
             (batch_id,),
         ).fetchall()
@@ -427,7 +426,7 @@ def export_data():
     fmt = request.args.get("format", "csv").lower()
     if fmt not in {"csv", "xlsx"}:
         return jsonify({"success": False, "message": "Format ekspor harus csv atau xlsx."}), 400
-    dataframe, _ = load_data(DB_PATH)
+    dataframe, _ = load_data(DATABASE_URL)
     dataframe = apply_filters(
         dataframe,
         kecamatan_list=request.args.getlist("kecamatan") or None,

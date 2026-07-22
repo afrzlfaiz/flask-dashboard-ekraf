@@ -3,7 +3,7 @@ from flask import jsonify, request
 from flask_login import current_user
 
 from api import api_bp
-from config import DB_PATH, KECAMATAN_LIST
+from config import DATABASE_URL, KECAMATAN_LIST
 from utils.data_loader import load_data
 from utils.filtering import apply_filters
 
@@ -11,7 +11,7 @@ KOTA_MALANG = set(KECAMATAN_LIST)
 
 
 def _get_filtered():
-    df, _ = load_data(DB_PATH)
+    df, _ = load_data(DATABASE_URL)
     return apply_filters(
         df,
         kecamatan_list=request.args.getlist("kecamatan") or None,

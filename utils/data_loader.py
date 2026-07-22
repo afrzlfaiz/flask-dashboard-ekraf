@@ -1,42 +1,19 @@
-"""
-Memuat dan membersihkan data dari SQLite (fallback: Excel multi-sheet).
-Mengikuti pola dari main.ipynb cell 1.
-"""
+"""Memuat dan membersihkan data dari PostgreSQL."""
 
-import os
-import sqlite3
-from pathlib import Path
 from typing import Tuple
 
 import pandas as pd
 
-from config import DB_PATH
+from config import DATABASE_URL
+from utils.database import connect_db
 
-EXCEL_PATH = "data/ekraf.xlsx"
-
-# ponytail: cache DataFrame bersih di memori, invalidasi via mtime file DB.
-# Semua mutasi lewat SQLite (CRUD/impor) → mtime berubah saat commit → reload.
-_df_cache: pd.DataFrame | None = None
-_df_mtime: float | None = None
-
-
-def _load_from_sqlite(db_path: str) -> pd.DataFrame:
-    """Baca data dari SQLite. Hanya baris aktif (is_active = 1)."""
-    conn = sqlite3.connect(db_path)
+def _load_from_database(database_url: str) -> pd.DataFrame:
+    conn = connect_db(database_url)
     try:
-        return pd.read_sql("SELECT * FROM pelaku_ekraf WHERE is_active = 1", conn)
+        rows = conn.execute("SELECT * FROM pelaku_ekraf WHERE is_active = 1").fetchall()
+        return pd.DataFrame([dict(row) for row in rows])
     finally:
         conn.close()
-
-
-def _load_from_excel(filepath: str) -> pd.DataFrame:
-    """Baca semua sheet dari Excel (dinamis)."""
-    sheets = pd.read_excel(filepath, sheet_name=None)
-    dfs: list[pd.DataFrame] = []
-    for name, df_sheet in sheets.items():
-        df_sheet["Sheet"] = name
-        dfs.append(df_sheet)
-    return pd.concat(dfs, ignore_index=True)
 
 
 def _clean(df: pd.DataFrame) -> pd.DataFrame:
@@ -69,27 +46,7 @@ def _meta_for(df: pd.DataFrame) -> dict:
     }
 
 
-def load_data(filepath: str | None = None) -> Tuple[pd.DataFrame, dict]:
-    """Baca data dari SQLite (default) atau Excel (fallback), bersihkan, kembalikan DataFrame + metadata."""
-    global _df_cache, _df_mtime
-    if filepath is None:
-        filepath = DB_PATH
-
-    # Cache hanya untuk sumber SQLite default; Excel fallback selalu baca ulang.
-    if filepath.endswith(".db") and Path(filepath).exists():
-        mtime = os.path.getmtime(filepath)
-        if _df_cache is not None and _df_mtime == mtime:
-            # Sumber sama persis — kembalikan copy agar pemanggil bebas mutasi tanpa mengontaminasi cache.
-            return _df_cache.copy(), _meta_for(_df_cache)
-
-        df = _clean(_load_from_sqlite(filepath))
-        if filepath == DB_PATH:
-            _df_cache = df.copy()
-            _df_mtime = mtime
-        return df, _meta_for(df)
-
-    if Path(EXCEL_PATH).exists():
-        df = _clean(_load_from_excel(EXCEL_PATH))
-    else:
-        df = _clean(_load_from_excel(filepath))  # user-provided path
+def load_data(database_url: str | None = None) -> Tuple[pd.DataFrame, dict]:
+    """Baca data aktif dari PostgreSQL dan kembalikan DataFrame beserta metadata."""
+    df = _clean(_load_from_database(database_url or DATABASE_URL))
     return df, _meta_for(df)

@@ -16,7 +16,6 @@ from api import api_bp
 from auth import init_users_table, login_manager
 from config import (
     ALLOWED_ORIGINS,
-    AUTO_BACKUP_ENABLED,
     CORS_SUPPORTS_CREDENTIALS,
     DEBUG,
     FLASK_ENV,
@@ -29,7 +28,6 @@ from config import (
     SESSION_COOKIE_SECURE,
     SESSION_TIMEOUT_MINUTES,
 )
-from utils.backup import start_backup_scheduler
 from utils.database import initialize_database
 
 csrf = CSRFProtect()
@@ -45,7 +43,6 @@ def create_app(test_config=None):
         SESSION_COOKIE_SAMESITE=SESSION_COOKIE_SAMESITE,
         PERMANENT_SESSION_LIFETIME=timedelta(minutes=SESSION_TIMEOUT_MINUTES),
         SESSION_REFRESH_EACH_REQUEST=True,
-        AUTO_BACKUP_ENABLED=AUTO_BACKUP_ENABLED,
     )
     if test_config:
         app.config.update(test_config)
@@ -159,7 +156,6 @@ def create_app(test_config=None):
             500, "Terjadi kesalahan internal. Silakan hubungi administrator.", code=reference
         )
 
-    start_backup_scheduler(app)
     return app
 
 

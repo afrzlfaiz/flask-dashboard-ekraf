@@ -47,7 +47,7 @@ def load_user(user_id):
     conn = connect_db()
     try:
         row = conn.execute(
-            "SELECT id, username, role, is_active, must_change_password FROM users WHERE id = ?",
+            "SELECT id, username, role, is_active, must_change_password FROM users WHERE id = %s",
             (int(user_id),),
         ).fetchone()
     finally:
@@ -99,7 +99,7 @@ def init_users_table():
         for row in rows:
             if row["username"] == "admin" and check_password_hash(row["password_hash"], "admin123"):
                 conn.execute(
-                    "UPDATE users SET is_active = 0, updated_at = ? WHERE id = ?",
+                    "UPDATE users SET is_active = 0, updated_at = %s WHERE id = %s",
                     (utcnow(), row["id"]),
                 )
                 logger.critical(
@@ -111,21 +111,21 @@ def init_users_table():
         ).fetchone()
         if not active_admin and _validate_bootstrap_credentials():
             existing = conn.execute(
-                "SELECT id FROM users WHERE username = ?", (BOOTSTRAP_ADMIN_USERNAME,)
+                "SELECT id FROM users WHERE username = %s", (BOOTSTRAP_ADMIN_USERNAME,)
             ).fetchone()
             password_hash = generate_password_hash(BOOTSTRAP_ADMIN_PASSWORD)
             now = utcnow()
             if existing:
                 conn.execute(
-                    """UPDATE users SET password_hash = ?, role = 'admin', is_active = 1,
-                       must_change_password = 0, updated_at = ? WHERE id = ?""",
+                    """UPDATE users SET password_hash = %s, role = 'admin', is_active = 1,
+                       must_change_password = 0, updated_at = %s WHERE id = %s""",
                     (password_hash, now, existing["id"]),
                 )
             else:
                 conn.execute(
                     """INSERT INTO users
                        (username, password_hash, role, is_active, created_at, must_change_password)
-                       VALUES (?, ?, 'admin', 1, ?, 0)""",
+                       VALUES (%s, %s, 'admin', 1, %s, 0)""",
                     (BOOTSTRAP_ADMIN_USERNAME, password_hash, now),
                 )
             logger.warning("Admin bootstrap dibuat dari environment: %s", BOOTSTRAP_ADMIN_USERNAME)

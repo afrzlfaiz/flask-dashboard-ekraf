@@ -4,7 +4,7 @@ import math
 from flask import jsonify, request
 
 from api import api_bp
-from config import DB_PATH
+from config import DATABASE_URL
 from utils.data_loader import load_data
 from utils.filtering import apply_filters
 
@@ -38,7 +38,7 @@ def dbscan():
     eps_radians = math.radians(eps_degrees)
     min_samples = int(body.get("min_samples", 4))
 
-    df, _ = load_data(DB_PATH)
+    df, _ = load_data(DATABASE_URL)
     filtered = apply_filters(df, **filters)
 
     # Override DBSCAN params temporarily
@@ -160,7 +160,7 @@ def dbscan_optimal():
         "search_text": body.get("search", ""),
     }
 
-    df, _ = load_data(DB_PATH)
+    df, _ = load_data(DATABASE_URL)
     filtered = apply_filters(df, **filters)
     data = filtered.dropna(subset=["lat", "lon"]).copy()
 

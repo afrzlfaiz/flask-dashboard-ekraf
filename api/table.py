@@ -1,4 +1,4 @@
-"""GET /api/table — return a bounded SQLite page for DataTables."""
+"""GET /api/table — return a bounded PostgreSQL page for DataTables."""
 from __future__ import annotations
 
 from typing import Any
@@ -55,7 +55,7 @@ def _append_in_filter(
     cleaned = [value.strip() for value in values if value.strip()]
     if not cleaned:
         return
-    placeholders = ", ".join("?" for _ in cleaned)
+    placeholders = ", ".join("%s" for _ in cleaned)
     clauses.append(f'{column} IN ({placeholders})')
     params.extend(cleaned)
 
@@ -110,7 +110,7 @@ def table_data():
 
     dashboard_search = request.args.get("search", "").strip()[:200]
     if dashboard_search:
-        clauses.append('COALESCE("Nama Narasumber", \'\') LIKE ? ESCAPE \'\\\'')
+        clauses.append('COALESCE("Nama Narasumber", \'\') LIKE %s ESCAPE \'\\\'')
         params.append(_like_pattern(dashboard_search))
 
     quick_search = request.args.get("quick_search", "").strip()[:200]
@@ -118,7 +118,7 @@ def table_data():
         pattern = _like_pattern(quick_search)
         clauses.append(
             "(" + " OR ".join(
-                f"COALESCE({column}, '') LIKE ? ESCAPE '\\'"
+                f"COALESCE({column}, '') LIKE %s ESCAPE '\\'"
                 for column in QUICK_SEARCH_COLUMNS
             ) + ")"
         )
@@ -134,17 +134,17 @@ def table_data():
         FROM pelaku_ekraf
         WHERE {where_sql}
         ORDER BY {sort_column} {direction.upper()}{tie_breaker}
-        LIMIT ? OFFSET ?
+        LIMIT %s OFFSET %s
     """
 
     conn = connect_db()
     try:
         records_total = conn.execute(
-            "SELECT COUNT(*) FROM pelaku_ekraf WHERE is_active = 1"
-        ).fetchone()[0]
+            "SELECT COUNT(*) AS total FROM pelaku_ekraf WHERE is_active = 1"
+        ).fetchone()["total"]
         records_filtered = conn.execute(
-            f"SELECT COUNT(*) FROM pelaku_ekraf WHERE {where_sql}", params
-        ).fetchone()[0]
+            f"SELECT COUNT(*) AS total FROM pelaku_ekraf WHERE {where_sql}", params
+        ).fetchone()["total"]
         page_rows = conn.execute(data_sql, [*params, per_page, offset]).fetchall()
     finally:
         conn.close()

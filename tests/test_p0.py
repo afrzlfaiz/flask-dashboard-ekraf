@@ -5,23 +5,27 @@ from __future__ import annotations
 import os
 import subprocess
 import sys
-import tempfile
 import unittest
+import uuid
 from contextlib import closing
 from io import BytesIO
 from pathlib import Path
 
+import psycopg
+from dotenv import load_dotenv
+from psycopg import sql
 
-_TEMP_ROOT = tempfile.TemporaryDirectory(prefix="dashboard-p0-tests-")
-TEST_ROOT = Path(_TEMP_ROOT.name)
+load_dotenv()
+_BASE_DATABASE_URL = os.environ["DATABASE_URL"]
+_TEST_SCHEMA = f"test_{uuid.uuid4().hex}"
+with psycopg.connect(_BASE_DATABASE_URL, autocommit=True) as _setup_conn:
+    _setup_conn.execute(sql.SQL("CREATE SCHEMA {}").format(sql.Identifier(_TEST_SCHEMA)))
 os.environ.update({
     "FLASK_ENV": "development",
     "FLASK_DEBUG": "false",
     "SECRET_KEY": "p0-test-secret-key-with-at-least-32-characters",
-    "DATABASE_URL": str(TEST_ROOT / "ekraf.db"),
-    "BACKUP_DIR": str(TEST_ROOT / "backups"),
-    "LOG_DIR": str(TEST_ROOT / "logs"),
-    "AUTO_BACKUP_ENABLED": "false",
+    "DATABASE_URL": _BASE_DATABASE_URL,
+    "DATABASE_SCHEMA": _TEST_SCHEMA,
     "ALLOWED_ORIGINS": "http://localhost",
 })
 
@@ -29,12 +33,15 @@ import pandas as pd  # noqa: E402
 from werkzeug.security import generate_password_hash  # noqa: E402
 
 from app import create_app  # noqa: E402
-from config import BACKUP_DIR  # noqa: E402
-from utils.backup import create_backup, restore_backup  # noqa: E402
 from utils.database import connect_db, transaction, utcnow  # noqa: E402
 
 
 PASSWORD = "StrongPassword!123"
+
+
+def tearDownModule():
+    with psycopg.connect(_BASE_DATABASE_URL, autocommit=True) as conn:
+        conn.execute(sql.SQL("DROP SCHEMA {} CASCADE").format(sql.Identifier(_TEST_SCHEMA)))
 
 
 class P0SecurityTests(unittest.TestCase):
@@ -42,7 +49,6 @@ class P0SecurityTests(unittest.TestCase):
         self.app = create_app({
             "TESTING": True,
             "WTF_CSRF_ENABLED": False,
-            "AUTO_BACKUP_ENABLED": False,
         })
         with transaction() as conn:
             for table in (
@@ -55,7 +61,7 @@ class P0SecurityTests(unittest.TestCase):
                    ("Nama Narasumber", "Nama Usaha", "Alamat", "Kecamatan", "Kelurahan",
                     "No Telp", "Sub Sektor", "Tahun Berdiri", "Email", lat, lon,
                     "Sheet", created_at)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
+                   VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)''',
                 (
                     "Nama Rahasia", "Usaha Rahasia", "Alamat Rahasia", "Klojen", "Klojen",
                     "081234567890", "8) Kuliner", 2020, "rahasia@example.test",
@@ -69,7 +75,7 @@ class P0SecurityTests(unittest.TestCase):
                 conn.execute(
                     '''INSERT INTO users
                        (username, password_hash, role, is_active, created_at, must_change_password)
-                       VALUES (?, ?, ?, 1, ?, 0)''',
+                       VALUES (%s, %s, %s, 1, %s, 0)''',
                     (username, generate_password_hash(PASSWORD), role, utcnow()),
                 )
         self.client = self.app.test_client()
@@ -132,7 +138,7 @@ class P0SecurityTests(unittest.TestCase):
                        ("Nama Narasumber", "Nama Usaha", "Alamat", "Kecamatan", "Kelurahan",
                         "No Telp", "Sub Sektor", "Tahun Berdiri", "Email", lat, lon,
                         "Sheet", created_at)
-                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
+                       VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)''',
                     (
                         f"Narasumber {number:02d}", f"Usaha {number:02d}",
                         f"Jalan {number}", kecamatan, kecamatan,
@@ -258,8 +264,27 @@ class P0SecurityTests(unittest.TestCase):
             200,
         )
         with closing(connect_db()) as conn:
-            actions = {row[0] for row in conn.execute("SELECT action FROM audit_logs")}
+            actions = {row["action"] for row in conn.execute("SELECT action FROM audit_logs")}
         self.assertTrue({"create", "update", "soft_delete", "restore", "purge"} <= actions)
+
+    def test_admin_can_remove_operator_without_deleting_audit_history(self):
+        self.login("operator1")
+        self.client.post("/api/auth/logout")
+        self.login("admin1")
+        users = self.client.get("/api/auth/users").get_json()["users"]
+        operator_id = next(user["id"] for user in users if user["username"] == "operator1")
+
+        removed = self.client.delete(f"/api/auth/users/{operator_id}")
+        self.assertEqual(removed.status_code, 200, removed.get_data(as_text=True))
+        active_users = self.client.get("/api/auth/users").get_json()["users"]
+        self.assertNotIn("operator1", {user["username"] for user in active_users})
+        with closing(connect_db()) as conn:
+            self.assertEqual(conn.execute(
+                "SELECT is_active FROM users WHERE id = %s", (operator_id,)
+            ).fetchone()["is_active"], 0)
+            self.assertTrue(conn.execute(
+                "SELECT 1 FROM audit_logs WHERE user_id = %s", (operator_id,)
+            ).fetchone())
 
     def test_staged_import_preview_commit_error_report_and_rollback(self):
         self.login("operator1")
@@ -318,7 +343,6 @@ class P0SecurityTests(unittest.TestCase):
         committed = self.client.post(f'/api/upload/{batch["id"]}/commit')
         self.assertEqual(committed.status_code, 200, committed.get_data(as_text=True))
         self.assertEqual(committed.get_json()["inserted"], 1)
-        self.assertTrue(list(Path(BACKUP_DIR).glob("*pre-import*.db")))
         self.client.post("/api/auth/logout")
 
         self.login("admin1")
@@ -326,9 +350,9 @@ class P0SecurityTests(unittest.TestCase):
         self.assertEqual(rolled_back.status_code, 200)
         with closing(connect_db()) as conn:
             active = conn.execute(
-                "SELECT COUNT(*) FROM pelaku_ekraf WHERE import_batch_id = ? AND is_active = 1",
+                "SELECT COUNT(*) AS total FROM pelaku_ekraf WHERE import_batch_id = %s AND is_active = 1",
                 (batch["id"],),
-            ).fetchone()[0]
+            ).fetchone()["total"]
         self.assertEqual(active, 0)
 
     def test_login_rate_limit_and_secure_session_cookie(self):
@@ -359,7 +383,6 @@ class P0SecurityTests(unittest.TestCase):
             "TESTING": True,
             "PROPAGATE_EXCEPTIONS": False,
             "WTF_CSRF_ENABLED": True,
-            "AUTO_BACKUP_ENABLED": False,
         })
         @csrf_app.get("/_test_internal_error")
         def internal_error():
@@ -379,22 +402,6 @@ class P0SecurityTests(unittest.TestCase):
         self.assertNotIn("detail internal", body)
         self.assertEqual(server_error.get_json()["code"], server_error.headers["X-Request-ID"])
 
-    def test_backup_and_restore(self):
-        backup = create_backup("test-restore")
-        with transaction() as conn:
-            conn.execute(
-                'UPDATE pelaku_ekraf SET "Nama Usaha" = ? WHERE "Nama Usaha" = ?',
-                ("BERUBAH", "Usaha Rahasia"),
-            )
-        restore_backup(backup.name, confirm="RESTORE")
-        with closing(connect_db()) as conn:
-            restored = conn.execute(
-                'SELECT "Nama Usaha" FROM pelaku_ekraf WHERE "Nama Narasumber" = ?',
-                ("Nama Rahasia",),
-            ).fetchone()[0]
-        self.assertEqual(restored, "Usaha Rahasia")
-        self.assertTrue((Path(BACKUP_DIR) / "restore-history.jsonl").exists())
-
     def test_production_configuration_fails_closed(self):
         safe_environment = os.environ.copy()
         safe_environment.update({
@@ -402,7 +409,6 @@ class P0SecurityTests(unittest.TestCase):
             "FLASK_DEBUG": "false",
             "SECRET_KEY": "production-test-secret-with-at-least-32-characters",
             "ALLOWED_ORIGINS": "https://dashboard.example.test",
-            "BACKUP_DIR": str(TEST_ROOT / "production-backups"),
             "SESSION_COOKIE_SECURE": "true",
         })
         valid = subprocess.run(

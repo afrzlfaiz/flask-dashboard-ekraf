@@ -339,7 +339,7 @@ document.addEventListener("DOMContentLoaded", () => {
                     <td><span class="badge ${u.role === 'admin' ? 'bg-danger' : 'bg-info text-dark'}">${App.escapeHTML(u.role)}</span></td>
                     <td class="small text-muted">${u.last_login_at ? new Date(u.last_login_at).toLocaleDateString("id-ID") : "—"}</td>
                     <td class="text-end">
-                        ${u.role !== 'admin' ? `<button class="btn btn-outline-danger btn-sm py-0 px-2 rounded-3" onclick="UserMgmt.remove(${u.id}, '${App.escapeHTML(u.username)}')" title="Hapus"><i class="bi bi-trash3"></i></button>` : '<span class="text-muted small">admin</span>'}
+                        ${u.role !== 'admin' ? `<button class="btn btn-outline-danger btn-sm py-0 px-2 rounded-3" data-delete-user="${u.id}" data-username="${App.escapeHTML(u.username)}" title="Hapus"><i class="bi bi-trash3"></i></button>` : '<span class="text-muted small">admin</span>'}
                     </td>
                 </tr>`).join("");
         },
@@ -386,6 +386,10 @@ document.addEventListener("DOMContentLoaded", () => {
     };
 
     document.getElementById("btn-create-user").addEventListener("click", () => UserMgmt.create());
+    document.getElementById("user-list-table-body").addEventListener("click", event => {
+        const button = event.target.closest("[data-delete-user]");
+        if (button) UserMgmt.remove(Number(button.dataset.deleteUser), button.dataset.username);
+    });
     // Load user list when Kelola page opened (only runs if admin section visible)
     const origUpdateUI = Auth.updateUI.bind(Auth);
     Auth.updateUI = function () {

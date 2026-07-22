@@ -352,7 +352,7 @@ Tambahkan `.env` ke `.gitignore`.
 
 ### Masalah
 
-SQLite mudah dicadangkan, tetapi tetap membutuhkan prosedur rutin.
+PostgreSQL Supabase tetap membutuhkan kebijakan backup dan retensi yang jelas.
 
 ### Checklist
 

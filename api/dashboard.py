@@ -6,7 +6,7 @@ from flask import jsonify, request
 from flask_login import current_user
 
 from api import api_bp
-from config import DB_PATH, GEOJSON_DIR, KECAMATAN_GEOJSON_PATHS
+from config import DATABASE_URL, GEOJSON_DIR, KECAMATAN_GEOJSON_PATHS
 from utils.data_loader import load_data
 from utils.filtering import apply_filters
 from utils.helper import row_to_dict
@@ -28,7 +28,7 @@ def _parse_filters():
 
 @api_bp.route("/kpi")
 def kpi():
-    df, _ = load_data(DB_PATH)
+    df, _ = load_data(DATABASE_URL)
     filters = _parse_filters()
     filtered = apply_filters(df, **filters)
     metrics = get_kpi_metrics(filtered)
@@ -59,7 +59,7 @@ def _load_boundaries():
 
 @api_bp.route("/map")
 def map_data():
-    df, _ = load_data(DB_PATH)
+    df, _ = load_data(DATABASE_URL)
     filters = _parse_filters()
     filtered = apply_filters(df, **filters)
 
