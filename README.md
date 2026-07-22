@@ -136,12 +136,6 @@ python scripts/manage_users.py create nama_admin --role admin
 
 Panduan konfigurasi production dan import tersedia di [SECURITY.md](SECURITY.md).
 
-### 7. Jalankan Test P0
-
-```bash
-python -m unittest discover -s tests -v
-```
-
 ## Deploy ke Render dengan Docker
 
 Repository sudah menyediakan `Dockerfile`, health check `/healthz`, dan `render.yaml`.
