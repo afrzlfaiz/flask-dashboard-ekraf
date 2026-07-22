@@ -102,14 +102,16 @@ def create_app(test_config=None):
     def dashboard():
         return render_template("dashboard.html")
 
-    @app.route("/login")
-    def login_page():
+    @app.route("/admin")
+    def admin_login_page():
         return render_template("login.html")
 
+    @app.route("/login")
+    def login_page():
+        return redirect(url_for("admin_login_page"))
+
     def dashboard_page(page):
-        if page in {"clustering", "tabel", "kelola"} and not current_user.is_authenticated:
-            return redirect(url_for("login_page", redirect=f"/{page}"))
-        if page == "kelola" and not current_user.has_role("operator"):
+        if page == "kelola" and not (current_user.is_authenticated and current_user.has_role("operator")):
             return error_response(403, "Anda tidak memiliki izin membuka halaman kelola data.")
         return render_template("dashboard.html", page=page)
 

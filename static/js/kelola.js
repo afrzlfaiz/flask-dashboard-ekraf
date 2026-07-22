@@ -322,4 +322,77 @@ document.addEventListener("DOMContentLoaded", () => {
     dropZone.addEventListener("click", e => {
         if (!e.target.closest("button")) fileInput.click();
     });
+
+    // ── User Management (admin only) ─────────────────
+    const UserMgmt = {
+        async list() {
+            const resp = await fetch("/api/auth/users");
+            const data = await resp.json();
+            const tbody = document.getElementById("user-list-table-body");
+            if (!data.users || !data.users.length) {
+                tbody.innerHTML = '<tr><td colspan="4" class="text-center text-muted py-3 small">Belum ada user operator.</td></tr>';
+                return;
+            }
+            tbody.innerHTML = data.users.map(u => `
+                <tr>
+                    <td><strong>${App.escapeHTML(u.username)}</strong></td>
+                    <td><span class="badge ${u.role === 'admin' ? 'bg-danger' : 'bg-info text-dark'}">${App.escapeHTML(u.role)}</span></td>
+                    <td class="small text-muted">${u.last_login_at ? new Date(u.last_login_at).toLocaleDateString("id-ID") : "—"}</td>
+                    <td class="text-end">
+                        ${u.role !== 'admin' ? `<button class="btn btn-outline-danger btn-sm py-0 px-2 rounded-3" onclick="UserMgmt.remove(${u.id}, '${App.escapeHTML(u.username)}')" title="Hapus"><i class="bi bi-trash3"></i></button>` : '<span class="text-muted small">admin</span>'}
+                    </td>
+                </tr>`).join("");
+        },
+        async create() {
+            const alertEl = document.getElementById("user-list-alert");
+            const username = document.getElementById("new-user-username").value.trim();
+            const password = document.getElementById("new-user-password").value;
+            if (!username || username.length < 3) {
+                alertEl.className = "alert alert-danger py-2 small";
+                alertEl.textContent = "Username minimal 3 karakter.";
+                alertEl.classList.remove("d-none");
+                return;
+            }
+            if (!password || password.length < 8) {
+                alertEl.className = "alert alert-danger py-2 small";
+                alertEl.textContent = "Password minimal 8 karakter.";
+                alertEl.classList.remove("d-none");
+                return;
+            }
+            const resp = await fetch("/api/auth/users", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ username, password }),
+            });
+            const data = await resp.json();
+            if (resp.ok) {
+                alertEl.className = "alert alert-success py-2 small";
+                document.getElementById("new-user-username").value = "";
+                document.getElementById("new-user-password").value = "";
+                await this.list();
+            } else {
+                alertEl.className = "alert alert-danger py-2 small";
+            }
+            alertEl.textContent = data.message;
+            alertEl.classList.remove("d-none");
+        },
+        async remove(id, username) {
+            if (!confirm(`Hapus user "${username}"? Tindakan ini tidak bisa dibatalkan.`)) return;
+            const resp = await fetch(`/api/auth/users/${id}`, { method: "DELETE" });
+            const data = await resp.json();
+            App.showToast(data.success ? "Sukses" : "Error", data.message);
+            if (data.success) await this.list();
+        },
+    };
+
+    document.getElementById("btn-create-user").addEventListener("click", () => UserMgmt.create());
+    // Load user list when Kelola page opened (only runs if admin section visible)
+    const origUpdateUI = Auth.updateUI.bind(Auth);
+    Auth.updateUI = function () {
+        origUpdateUI();
+        if (Auth.hasRole("admin")) {
+            UserMgmt.list();
+            document.querySelectorAll(".auth-admin-only").forEach(el => el.style.display = "");
+        }
+    };
 });

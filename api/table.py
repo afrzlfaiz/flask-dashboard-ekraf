@@ -4,7 +4,7 @@ from __future__ import annotations
 from typing import Any
 
 from flask import jsonify, request
-from flask_login import login_required
+from flask_login import current_user
 
 from api import api_bp
 from utils.database import connect_db
@@ -60,7 +60,7 @@ def _append_in_filter(
     params.extend(cleaned)
 
 
-def _serialize_row(row, number: int) -> dict[str, Any]:
+def _serialize_row(row, number: int, can_view_pii: bool = True) -> dict[str, Any]:
     business_name = row["Nama Usaha"] or row["Nama Narasumber"] or ""
     year = row["Tahun Berdiri"]
     if year not in (None, ""):
@@ -71,7 +71,7 @@ def _serialize_row(row, number: int) -> dict[str, Any]:
     else:
         year = ""
 
-    return {
+    result = {
         "no": number,
         "id": int(row["id"]),
         "nama_narasumber": row["Nama Narasumber"] or "",
@@ -79,18 +79,19 @@ def _serialize_row(row, number: int) -> dict[str, Any]:
         "alamat": row["Alamat"] or "",
         "kecamatan": row["Kecamatan"] or "",
         "kelurahan": row["Kelurahan"] or "",
-        "no_hp": row["No Telp"] or "",
         "subsektor": row["Sub Sektor"] or "",
         "kategori_usaha": row["Kategori Usaha"] or "",
         "tahun_berdiri": year,
-        "email": row["Email"] or "",
         "latitude": row["lat"],
         "longitude": row["lon"],
     }
+    if can_view_pii:
+        result["no_hp"] = row["No Telp"] or ""
+        result["email"] = row["Email"] or ""
+    return result
 
 
 @api_bp.route("/table")
-@login_required
 def table_data():
     page = _bounded_int("page", 1, 1, 2_147_483_647)
     per_page = _bounded_int("per_page", DEFAULT_PAGE_SIZE, 1, MAX_PAGE_SIZE)
@@ -148,7 +149,8 @@ def table_data():
     finally:
         conn.close()
 
-    rows = [_serialize_row(row, offset + index + 1) for index, row in enumerate(page_rows)]
+    can_view_pii = current_user.is_authenticated and current_user.has_role("operator")
+    rows = [_serialize_row(row, offset + index + 1, can_view_pii=can_view_pii) for index, row in enumerate(page_rows)]
     return jsonify({
         "draw": draw,
         "data": rows,

@@ -84,6 +84,15 @@ def _reference_values(conn):
 def validate_actor_payload(body: dict, conn) -> tuple[dict, list[str]]:
     """Return normalized DB-column values and human-readable validation errors."""
     payload = _canonical_payload(body)
+
+    # ponytail: jika hanya satu dari nama usaha/narasumber yang diisi, samakan nilainya.
+    nn = (payload.get("nama_narasumber") or "").strip()
+    nu = (payload.get("nama_usaha") or "").strip()
+    if nn and not nu:
+        payload["nama_usaha"] = nn
+    elif nu and not nn:
+        payload["nama_narasumber"] = nu
+
     errors = []
 
     for field, label in REQUIRED_FIELDS.items():
@@ -127,7 +136,7 @@ def validate_actor_payload(body: dict, conn) -> tuple[dict, list[str]]:
     email = payload.get("email", "")
     if email and not EMAIL_RE.fullmatch(email):
         errors.append("Format email tidak valid.")
-    phone = re.sub(r"[\s()+.-]", "", payload.get("no_hp", ""))
+    phone = re.sub(r"[\s()+.-]", "", (payload.get("no_hp") or ""))
     if phone and (not phone.isdigit() or not 8 <= len(phone) <= 16):
         errors.append("Format nomor HP/WA tidak valid.")
 
@@ -180,7 +189,7 @@ def _audit_context():
 
 
 @api_bp.route("/crud", methods=["GET"])
-@login_required
+@role_required("operator")
 def crud_list():
     include_inactive = request.args.get("include_inactive") == "1" and current_user.has_role("admin")
     where = "1 = 1" if include_inactive else "is_active = 1"

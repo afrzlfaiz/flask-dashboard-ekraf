@@ -4,7 +4,7 @@ from datetime import datetime, timedelta
 
 from flask import g, jsonify, request, session
 from flask_login import current_user, login_required, login_user, logout_user
-from werkzeug.security import check_password_hash
+from werkzeug.security import check_password_hash, generate_password_hash
 
 from api import api_bp
 from auth import User
@@ -125,3 +125,89 @@ def auth_status():
             },
         })
     return jsonify({"success": True, "authenticated": False, "user": None})
+
+
+# ── User management (admin only) ─────────────────────────────
+@api_bp.route("/auth/users", methods=["GET"])
+def list_users():
+    """Daftar semua user — admin only."""
+    from auth import role_required
+    wrapped = role_required("admin")(lambda: None)
+    result = wrapped()
+    if result is not None:
+        return result
+    conn = connect_db()
+    try:
+        rows = conn.execute(
+            "SELECT id, username, role, is_active, created_at, last_login_at FROM users ORDER BY id"
+        ).fetchall()
+        return jsonify({"success": True, "users": [dict(r) for r in rows]})
+    finally:
+        conn.close()
+
+
+@api_bp.route("/auth/users", methods=["POST"])
+def create_user():
+    """Buat user operator baru — admin only."""
+    from auth import role_required
+    wrapped = role_required("admin")(lambda: None)
+    result = wrapped()
+    if result is not None:
+        return result
+
+    body = request.get_json(silent=True) or {}
+    username = (body.get("username") or "").strip()
+    password = body.get("password") or ""
+
+    if not username or len(username) < 3 or len(username) > 64:
+        return jsonify({"success": False, "message": "Username harus 3–64 karakter."}), 400
+    if len(password) < 8:
+        return jsonify({"success": False, "message": "Password minimal 8 karakter."}), 400
+
+    with transaction() as conn:
+        exists = conn.execute("SELECT 1 FROM users WHERE username = ?", (username,)).fetchone()
+        if exists:
+            return jsonify({"success": False, "message": "Username sudah digunakan."}), 409
+
+        password_hash = generate_password_hash(password)
+        now = utcnow()
+        conn.execute(
+            """INSERT INTO users (username, password_hash, role, is_active, created_at, must_change_password)
+               VALUES (?, ?, 'operator', 1, ?, 0)""",
+            (username, password_hash, now),
+        )
+        record_audit(
+            conn, action="user_created", entity="users", new_value={"username": username},
+            user_id=current_user.id, ip_address=_client_ip(),
+            request_id=getattr(g, "request_id", None),
+        )
+
+    return jsonify({"success": True, "message": f"User {username} berhasil dibuat."}), 201
+
+
+@api_bp.route("/auth/users/<int:user_id>", methods=["DELETE"])
+def delete_user(user_id):
+    """Hapus user — admin only, tidak bisa hapus diri sendiri."""
+    from auth import role_required
+    wrapped = role_required("admin")(lambda: None)
+    result = wrapped()
+    if result is not None:
+        return result
+
+    if user_id == current_user.id:
+        return jsonify({"success": False, "message": "Tidak bisa menghapus akun sendiri."}), 400
+
+    with transaction() as conn:
+        row = conn.execute("SELECT id, username FROM users WHERE id = ?", (user_id,)).fetchone()
+        if not row:
+            return jsonify({"success": False, "message": "User tidak ditemukan."}), 404
+
+        conn.execute("DELETE FROM users WHERE id = ?", (user_id,))
+        record_audit(
+            conn, action="user_deleted", entity="users", entity_id=user_id,
+            new_value={"username": row["username"]},
+            user_id=current_user.id, ip_address=_client_ip(),
+            request_id=getattr(g, "request_id", None),
+        )
+
+    return jsonify({"success": True, "message": f"User {row['username']} dihapus."})

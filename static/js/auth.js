@@ -30,7 +30,7 @@ const Auth = {
     },
     hasRole(role) {
         if (!this._user) return false;
-        const ROLES = ["viewer", "operator", "validator", "admin"];
+        const ROLES = ["operator", "admin"];
         if (!ROLES.includes(role) || !ROLES.includes(this._user.role)) return false;
         return ROLES.indexOf(this._user.role) >= ROLES.indexOf(role);
     },
@@ -38,7 +38,7 @@ const Auth = {
     // ── Redirect to login if not authenticated ──────────
     require(role) {
         if (!this.isAuthenticated()) {
-            window.location.href = "/login?redirect=" + encodeURIComponent(window.location.pathname);
+            window.location.href = "/admin?redirect=" + encodeURIComponent(window.location.pathname);
             return false;
         }
         if (role && !this.hasRole(role)) {
@@ -56,9 +56,7 @@ const Auth = {
         if (this.isAuthenticated()) {
             const roleBadge = {
                 admin: '<span class="badge bg-danger">Admin</span>',
-                validator: '<span class="badge bg-warning text-dark">Validator</span>',
                 operator: '<span class="badge bg-info text-dark">Operator</span>',
-                viewer: '<span class="badge bg-secondary">Viewer</span>',
             }[this._user.role] || "";
 
             const safeUsername = String(this._user.username)
@@ -79,10 +77,8 @@ const Auth = {
                     </button>
                 </div>`;
         } else {
-            area.innerHTML = `
-                <a href="/login" class="btn btn-outline-light btn-sm w-100">
-                    <i class="bi bi-lock me-1"></i> Login
-                </a>`;
+            // ponytail: publik tidak perlu login — tombol login tidak ditampilkan.
+            area.innerHTML = "";
         }
 
         // Show/hide admin-only elements
@@ -134,14 +130,14 @@ window.fetch = async function (url, options = {}) {
     if (resp.status === 401 && Auth._checked && Auth.isAuthenticated()) {
         Auth._user = null;
         Auth.updateUI();
-        window.location.href = "/login?expired=1";
+        window.location.href = "/admin?expired=1";
     }
     // For non-auth users hitting 401 on mutation endpoints, redirect to login
     if (resp.status === 401 && !Auth.isAuthenticated() &&
         ["POST", "PUT", "PATCH", "DELETE"].includes(method)) {
         const action = requestUrl.pathname;
         if (action.startsWith("/api/crud") || action === "/api/upload") {
-            window.location.href = "/login?redirect=" + encodeURIComponent(window.location.pathname);
+            window.location.href = "/admin?redirect=" + encodeURIComponent(window.location.pathname);
         }
     }
     return resp;

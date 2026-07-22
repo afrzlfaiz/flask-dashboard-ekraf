@@ -5,14 +5,17 @@ Utilitas umum: filter info text, kelurahan options, row serialization.
 import pandas as pd
 
 
-def row_to_dict(row: pd.Series, public: bool = False) -> dict:
+def row_to_dict(row: pd.Series, public: bool = False, can_view_pii: bool = True) -> dict:
     """Convert a DataFrame row to the standard API dict format.
 
     Parameters
     ----------
     row : pd.Series
     public : bool
-        If True, strip PII fields (no_hp, email, alamat) for public endpoints.
+        If True, strip all identity fields (name, address, phone, email) for public endpoints.
+    can_view_pii : bool
+        If False, strip phone and email for viewer-role users who can see names/addresses
+        but not contact details. Ignored when ``public`` is True.
     """
     nama_usaha = row.get("Nama Usaha", "")
     if pd.isna(nama_usaha) or str(nama_usaha).strip() == "" or str(nama_usaha) == "nan":
@@ -43,8 +46,9 @@ def row_to_dict(row: pd.Series, public: bool = False) -> dict:
         result["latitude"] = float(row["lat"]) if row.get("lat") and not pd.isna(row["lat"]) else None
         result["longitude"] = float(row["lon"]) if row.get("lon") and not pd.isna(row["lon"]) else None
         result["alamat"] = str(row.get("Alamat", ""))
-        result["no_hp"] = str(row.get("No Telp", "")) if pd.notna(row.get("No Telp")) and str(row.get("No Telp")) != "nan" else ""
-        result["email"] = str(row.get("Email", "")) if pd.notna(row.get("Email")) and str(row.get("Email")) != "nan" else ""
+        if can_view_pii:
+            result["no_hp"] = str(row.get("No Telp", "")) if pd.notna(row.get("No Telp")) and str(row.get("No Telp")) != "nan" else ""
+            result["email"] = str(row.get("Email", "")) if pd.notna(row.get("Email")) and str(row.get("Email")) != "nan" else ""
 
     return result
 

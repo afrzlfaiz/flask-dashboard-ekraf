@@ -2,7 +2,6 @@
 import math
 
 from flask import jsonify, request
-from flask_login import login_required
 
 from api import api_bp
 from config import DB_PATH
@@ -11,7 +10,6 @@ from utils.filtering import apply_filters
 
 
 @api_bp.route("/dbscan", methods=["POST"])
-@login_required
 def dbscan():
     body = request.get_json(silent=True) or {}
 
@@ -138,7 +136,6 @@ def dbscan():
 
 
 @api_bp.route("/dbscan/optimal", methods=["POST"])
-@login_required
 def dbscan_optimal():
     """Grid search eps × min_samples maximizing silhouette score (haversine)."""
     import itertools

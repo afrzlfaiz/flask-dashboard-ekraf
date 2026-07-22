@@ -63,7 +63,6 @@ class P0SecurityTests(unittest.TestCase):
                 ),
             )
             for username, role in (
-                ("viewer1", "viewer"),
                 ("operator1", "operator"),
                 ("admin1", "admin"),
             ):
@@ -103,22 +102,25 @@ class P0SecurityTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.headers.get("Access-Control-Allow-Origin"), "http://localhost")
         marker = response.get_json()["markers"][0]
-        self.assertTrue(marker["is_aggregate"])
-        self.assertEqual(marker["latitude"], -7.98)
-        self.assertNotIn("nama_narasumber", marker)
-        self.assertNotIn("alamat", marker)
+        # ponytail: publik dapat marker individu (nama & alamat terlihat),
+        # tapi NO telepon/email (PII dilindungi).
+        self.assertIn("nama_narasumber", marker)
+        self.assertIn("alamat", marker)
+        self.assertNotIn("no_hp", marker)
+        self.assertNotIn("email", marker)
         serialized = response.get_data(as_text=True)
-        for secret in (
-            "Nama Rahasia", "Alamat Rahasia", "081234567890", "rahasia@example.test",
-        ):
-            self.assertNotIn(secret, serialized)
+        self.assertNotIn("081234567890", serialized)
+        self.assertNotIn("rahasia@example.test", serialized)
 
         denied_cors = self.client.get("/api/map", headers={"Origin": "https://evil.test"})
         self.assertNotIn("Access-Control-Allow-Origin", denied_cors.headers)
-        protected = self.client.get("/api/table")
-        self.assertEqual(protected.status_code, 401)
-        self.assertEqual(protected.get_json()["code"], protected.headers["X-Request-ID"])
-        self.assertEqual(self.client.post("/api/crud", json={}).status_code, 401)
+        # /api/table now public — returns data without PII
+        public_table = self.client.get("/api/table")
+        self.assertEqual(public_table.status_code, 200)
+        # Protected endpoint returns 401 with code matching X-Request-ID
+        crud_denied = self.client.post("/api/crud", json={})
+        self.assertEqual(crud_denied.status_code, 401)
+        self.assertEqual(crud_denied.get_json()["code"], crud_denied.headers["X-Request-ID"])
         self.assertNotIn("data", self.client.post("/api/filter", json={}).get_json())
 
     def test_table_server_side_pagination_filter_search_and_sort(self):
@@ -140,7 +142,7 @@ class P0SecurityTests(unittest.TestCase):
                     ),
                 )
 
-        self.login("viewer1")
+        # ponytail: tabel publik tanpa login — PII disembunyikan.
         first = self.client.get("/api/table?page=1&per_page=10&draw=7").get_json()
         second = self.client.get("/api/table?page=2&per_page=10").get_json()
 
@@ -188,7 +190,10 @@ class P0SecurityTests(unittest.TestCase):
             "/api/table", query_string={"quick_search": "usaha23@example.test"}
         ).get_json()
         self.assertEqual(quick_search["recordsFiltered"], 1)
-        self.assertEqual(quick_search["data"][0]["email"], "usaha23@example.test")
+        self.assertEqual(quick_search["data"][0]["nama_narasumber"], "Narasumber 23")
+        # ponytail: publik must NOT see phone/email; quick_search by email works but doesn't expose it.
+        self.assertNotIn("email", quick_search["data"][0])
+        self.assertNotIn("no_hp", quick_search["data"][0])
 
         no_matches = self.client.get(
             "/api/table", query_string={"quick_search": "tidak-ada-hasil"}
@@ -221,6 +226,8 @@ class P0SecurityTests(unittest.TestCase):
             sorted(row["id"] for row in safe_fallback),
         )
 
+        # Export requires operator role (contains PII: phone, email).
+        self.login("operator1")
         exported = self.client.get("/api/export?format=csv&page=1&per_page=1")
         self.assertEqual(exported.status_code, 200)
         exported_text = exported.get_data(as_text=True)
@@ -336,15 +343,16 @@ class P0SecurityTests(unittest.TestCase):
         self.assertEqual(limited.status_code, 429)
 
         self.app.config["SESSION_COOKIE_SECURE"] = True
-        response = self.login("viewer1")
+        response = self.login("operator1")
         cookie = response.headers.get("Set-Cookie", "")
         self.assertIn("Secure", cookie)
         self.assertIn("HttpOnly", cookie)
         self.assertIn("SameSite=Lax", cookie)
 
         with transaction() as conn:
-            conn.execute("UPDATE users SET is_active = 0 WHERE username = 'viewer1'")
-        self.assertEqual(self.client.get("/api/table").status_code, 401)
+            conn.execute("UPDATE users SET is_active = 0 WHERE username = 'operator1'")
+        # User tidak aktif → endpoint terproteksi return 401 (bukan publik)
+        self.assertEqual(self.client.get("/api/crud").status_code, 401)
 
     def test_csrf_safe_errors_and_request_reference(self):
         csrf_app = create_app({

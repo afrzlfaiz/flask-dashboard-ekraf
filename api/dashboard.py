@@ -66,33 +66,9 @@ def map_data():
     # Only rows with valid coords
     map_df = filtered.dropna(subset=["lat", "lon"])
 
-    if current_user.is_authenticated:
-        markers = [row_to_dict(row, public=False) for _, row in map_df.iterrows()]
-    else:
-        # Public map uses ~1 km grid aggregation. It never exposes identities or exact points.
-        public_df = map_df.copy()
-        public_df["lat_grid"] = public_df["lat"].round(2)
-        public_df["lon_grid"] = public_df["lon"].round(2)
-        grouped = (
-            public_df.groupby(["lat_grid", "lon_grid"], dropna=True)
-            .agg(
-                count=("lat", "size"),
-                kecamatan=("Kecamatan", lambda values: values.mode().iloc[0] if not values.mode().empty else ""),
-                subsektor=("Sub Sektor", lambda values: values.mode().iloc[0] if not values.mode().empty else ""),
-            )
-            .reset_index()
-        )
-        markers = [
-            {
-                "latitude": float(row["lat_grid"]),
-                "longitude": float(row["lon_grid"]),
-                "count": int(row["count"]),
-                "kecamatan": str(row["kecamatan"]),
-                "subsektor": str(row["subsektor"]),
-                "is_aggregate": True,
-            }
-            for _, row in grouped.iterrows()
-        ]
+    # ponytail: publik langsung lihat marker individu; PII (telp/email) hanya untuk operator/admin.
+    can_view_pii = current_user.is_authenticated and current_user.has_role("operator")
+    markers = [row_to_dict(row, public=False, can_view_pii=can_view_pii) for _, row in map_df.iterrows()]
 
     return jsonify({"markers": markers})
 

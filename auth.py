@@ -14,7 +14,7 @@ from utils.database import connect_db, initialize_database, transaction, utcnow
 
 logger = logging.getLogger(__name__)
 login_manager = LoginManager()
-ROLES = ["viewer", "operator", "validator", "admin"]
+ROLES = ["operator", "admin"]
 
 
 class User(UserMixin):

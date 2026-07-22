@@ -367,6 +367,41 @@
             </div>
         </div>
     </div>
+
+    <!-- User Management (admin only) -->
+    <div class="row auth-admin-only" style="display:none;">
+        <div class="col-12">
+            <div class="card custom-card section-card-body mb-4">
+                <h5 class="fw-bold mb-3 text-danger"><i class="bi bi-people-fill me-2"></i>Manajemen User Operator</h5>
+                <div class="row g-2 align-items-end mb-3">
+                    <div class="col-12 col-sm-4">
+                        <label class="form-label small fw-bold text-muted">USERNAME</label>
+                        <input type="text" class="form-control form-control-sm rounded-3" id="new-user-username" placeholder="Min. 3 karakter">
+                    </div>
+                    <div class="col-12 col-sm-4">
+                        <label class="form-label small fw-bold text-muted">PASSWORD</label>
+                        <input type="password" class="form-control form-control-sm rounded-3" id="new-user-password" placeholder="Min. 8 karakter">
+                    </div>
+                    <div class="col-12 col-sm-4">
+                        <button class="btn btn-danger btn-sm w-100 rounded-3" type="button" id="btn-create-user" style="min-height: 2.75rem;">
+                            <i class="bi bi-person-plus-fill me-1"></i> Buat User Operator
+                        </button>
+                    </div>
+                </div>
+                <div id="user-list-alert" class="alert d-none mb-3 py-2 small" role="alert"></div>
+                <div class="table-responsive" style="max-height: 300px;">
+                    <table class="table table-sm align-middle mb-0">
+                        <thead class="table-light">
+                            <tr><th>Username</th><th>Role</th><th>Login Terakhir</th><th class="text-end">Aksi</th></tr>
+                        </thead>
+                        <tbody id="user-list-table-body">
+                            <tr><td colspan="4" class="text-center text-muted py-3 small">Memuat daftar user...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
 </div>
 
 <!-- =================== PAGE 5: TENTANG =================== -->

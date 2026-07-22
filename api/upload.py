@@ -93,7 +93,7 @@ def _batch_access(conn, batch_id: str):
     batch = conn.execute("SELECT * FROM import_batches WHERE id = ?", (batch_id,)).fetchone()
     if not batch:
         return None, (jsonify({"success": False, "message": "Batch import tidak ditemukan."}), 404)
-    if int(batch["uploaded_by"]) != int(current_user.id) and not current_user.has_role("validator"):
+    if int(batch["uploaded_by"]) != int(current_user.id) and not current_user.has_role("admin"):
         return None, (jsonify({"success": False, "message": "Anda tidak memiliki akses ke batch ini."}), 403)
     return batch, None
 
@@ -171,6 +171,19 @@ def upload_excel():
 
     if dataframe.empty:
         return jsonify({"success": False, "message": "File XLSX tidak berisi data."}), 422
+    # ponytail: jika hanya satu dari "Nama Narasumber"/"Nama Usaha" yang ada, samakan.
+    has_nn = "Nama Narasumber" in dataframe.columns
+    has_nu = "Nama Usaha" in dataframe.columns
+    if not has_nn and not has_nu:
+        return jsonify({
+            "success": False,
+            "message": "Kolom wajib tidak ditemukan: Nama Narasumber / Nama Usaha.",
+        }), 422
+    if not has_nn:
+        dataframe["Nama Narasumber"] = dataframe["Nama Usaha"]
+    elif not has_nu:
+        dataframe["Nama Usaha"] = dataframe["Nama Narasumber"]
+
     missing = [column for column in REQUIRED_COLUMNS if column not in dataframe.columns]
     if missing:
         return jsonify({
@@ -409,7 +422,7 @@ def import_errors(batch_id):
 
 
 @api_bp.route("/export")
-@role_required("viewer")
+@role_required("operator")
 def export_data():
     fmt = request.args.get("format", "csv").lower()
     if fmt not in {"csv", "xlsx"}:
