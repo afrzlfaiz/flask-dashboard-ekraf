@@ -11,6 +11,8 @@ from flask import Flask, g, jsonify, redirect, render_template, request, url_for
 from flask_cors import CORS
 from flask_login import current_user
 from flask_wtf.csrf import CSRFError, CSRFProtect
+from flask_compress import Compress
+from werkzeug.middleware.proxy_fix import ProxyFix
 
 from api import api_bp
 from auth import init_users_table, login_manager
@@ -28,9 +30,9 @@ from config import (
     SESSION_COOKIE_SECURE,
     SESSION_TIMEOUT_MINUTES,
 )
-from utils.database import initialize_database
 
 csrf = CSRFProtect()
+compress = Compress()
 
 
 def create_app(test_config=None):
@@ -43,27 +45,35 @@ def create_app(test_config=None):
         SESSION_COOKIE_SAMESITE=SESSION_COOKIE_SAMESITE,
         PERMANENT_SESSION_LIFETIME=timedelta(minutes=SESSION_TIMEOUT_MINUTES),
         SESSION_REFRESH_EACH_REQUEST=True,
+        SEND_FILE_MAX_AGE_DEFAULT=timedelta(days=7) if FLASK_ENV == "production" else 0,
     )
     if test_config:
         app.config.update(test_config)
 
-    Path(LOG_DIR).mkdir(parents=True, exist_ok=True)
     if not app.config.get("TESTING"):
-        handler = RotatingFileHandler(
-            str(Path(LOG_DIR) / "app.log"), maxBytes=2_000_000, backupCount=10
-        )
+        if FLASK_ENV == "production":
+            handler = logging.StreamHandler()
+        else:
+            Path(LOG_DIR).mkdir(parents=True, exist_ok=True)
+            handler = RotatingFileHandler(
+                str(Path(LOG_DIR) / "app.log"), maxBytes=2_000_000, backupCount=10
+            )
         handler.setFormatter(logging.Formatter(
             "%(asctime)s %(levelname)s [%(name)s] %(message)s"
         ))
         app.logger.addHandler(handler)
         app.logger.setLevel(logging.INFO)
 
+    if FLASK_ENV == "production":
+        app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
+
     origins = [origin.strip() for origin in ALLOWED_ORIGINS.split(",") if origin.strip()]
-    CORS(
-        app,
-        resources={r"/api/*": {"origins": origins}},
-        supports_credentials=CORS_SUPPORTS_CREDENTIALS,
-    )
+    if origins:
+        CORS(
+            app,
+            resources={r"/api/*": {"origins": origins}},
+            supports_credentials=CORS_SUPPORTS_CREDENTIALS,
+        )
 
     @app.before_request
     def assign_request_id():
@@ -71,9 +81,9 @@ def create_app(test_config=None):
         g.request_id = supplied if re.fullmatch(r"[A-Za-z0-9._-]{1,64}", supplied) else str(uuid.uuid4())[:12]
 
     csrf.init_app(app)
+    compress.init_app(app)
     login_manager.init_app(app)
 
-    initialize_database()
     init_users_table()
     app.register_blueprint(api_bp)
 
@@ -98,6 +108,10 @@ def create_app(test_config=None):
     @app.route("/")
     def dashboard():
         return render_template("dashboard.html")
+
+    @app.route("/healthz")
+    def healthz():
+        return jsonify({"status": "ok"})
 
     @app.route("/admin")
     def admin_login_page():

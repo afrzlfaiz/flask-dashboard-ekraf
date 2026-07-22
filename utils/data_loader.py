@@ -1,19 +1,22 @@
 """Memuat dan membersihkan data dari PostgreSQL."""
 
+from threading import Lock
+from time import monotonic
 from typing import Tuple
 
 import pandas as pd
 
 from config import DATABASE_URL
-from utils.database import connect_db
+from utils.database import connection
+
+_CACHE_SECONDS = 20
+_cache_lock = Lock()
+_cache: tuple[float, pd.DataFrame, dict] | None = None
 
 def _load_from_database(database_url: str) -> pd.DataFrame:
-    conn = connect_db(database_url)
-    try:
+    with connection(database_url) as conn:
         rows = conn.execute("SELECT * FROM pelaku_ekraf WHERE is_active = 1").fetchall()
         return pd.DataFrame([dict(row) for row in rows])
-    finally:
-        conn.close()
 
 
 def _clean(df: pd.DataFrame) -> pd.DataFrame:
@@ -48,5 +51,22 @@ def _meta_for(df: pd.DataFrame) -> dict:
 
 def load_data(database_url: str | None = None) -> Tuple[pd.DataFrame, dict]:
     """Baca data aktif dari PostgreSQL dan kembalikan DataFrame beserta metadata."""
-    df = _clean(_load_from_database(database_url or DATABASE_URL))
-    return df, _meta_for(df)
+    global _cache
+    url = database_url or DATABASE_URL
+    now = monotonic()
+    with _cache_lock:
+        if url == DATABASE_URL and _cache and now - _cache[0] < _CACHE_SECONDS:
+            return _cache[1].copy(), dict(_cache[2])
+
+        df = _clean(_load_from_database(url))
+        meta = _meta_for(df)
+        if url == DATABASE_URL:
+            _cache = (now, df, meta)
+        return df.copy(), dict(meta)
+
+
+def invalidate_data_cache() -> None:
+    """Pastikan perubahan CRUD/import langsung terlihat pada request berikutnya."""
+    global _cache
+    with _cache_lock:
+        _cache = None

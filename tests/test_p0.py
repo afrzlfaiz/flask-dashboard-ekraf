@@ -34,6 +34,7 @@ from werkzeug.security import generate_password_hash  # noqa: E402
 
 from app import create_app  # noqa: E402
 from utils.database import connect_db, transaction, utcnow  # noqa: E402
+from utils.data_loader import invalidate_data_cache  # noqa: E402
 
 
 PASSWORD = "StrongPassword!123"
@@ -46,6 +47,7 @@ def tearDownModule():
 
 class P0SecurityTests(unittest.TestCase):
     def setUp(self):
+        invalidate_data_cache()
         self.app = create_app({
             "TESTING": True,
             "WTF_CSRF_ENABLED": False,

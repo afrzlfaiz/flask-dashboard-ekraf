@@ -3,15 +3,17 @@
 from __future__ import annotations
 
 import json
+import atexit
 from contextlib import contextmanager
 from datetime import datetime
 from typing import Any, Iterator
 
 import psycopg
 from psycopg import sql
+from psycopg_pool import ConnectionPool
 from psycopg.rows import dict_row
 
-from config import DATABASE_SCHEMA, DATABASE_URL
+from config import DATABASE_POOL_SIZE, DATABASE_SCHEMA, DATABASE_URL
 
 
 PELAKU_COLUMNS = {
@@ -31,12 +33,26 @@ USER_COLUMNS = {
     "must_change_password": "INTEGER NOT NULL DEFAULT 0",
 }
 
+_pool = ConnectionPool(
+    conninfo=DATABASE_URL,
+    min_size=0,
+    max_size=DATABASE_POOL_SIZE,
+    kwargs={
+        "row_factory": dict_row,
+        "connect_timeout": 15,
+        "options": f"-c search_path={DATABASE_SCHEMA}",
+    },
+    open=False,
+)
+atexit.register(_pool.close)
+
 
 def utcnow() -> str:
     return datetime.now().astimezone().isoformat(timespec="seconds")
 
 
 def connect_db(database_url: str | None = None) -> psycopg.Connection:
+    """Buka koneksi mandiri; dipertahankan untuk script administrasi dan test."""
     conn = psycopg.connect(
         database_url or DATABASE_URL, row_factory=dict_row, connect_timeout=15
     )
@@ -45,16 +61,27 @@ def connect_db(database_url: str | None = None) -> psycopg.Connection:
 
 
 @contextmanager
-def transaction(database_url: str | None = None) -> Iterator[psycopg.Connection]:
-    conn = connect_db(database_url)
-    try:
+def connection(database_url: str | None = None) -> Iterator[psycopg.Connection]:
+    """Pinjam koneksi aplikasi dari pool, atau koneksi mandiri untuk URL khusus."""
+    if database_url and database_url != DATABASE_URL:
+        conn = connect_db(database_url)
+        try:
+            yield conn
+        finally:
+            conn.close()
+        return
+
+    if _pool.closed:
+        _pool.open()
+    with _pool.connection() as conn:
         yield conn
-        conn.commit()
-    except Exception:
-        conn.rollback()
-        raise
-    finally:
-        conn.close()
+
+
+@contextmanager
+def transaction(database_url: str | None = None) -> Iterator[psycopg.Connection]:
+    with connection(database_url) as conn:
+        with conn.transaction():
+            yield conn
 
 
 def _table_exists(conn: psycopg.Connection, table: str) -> bool:

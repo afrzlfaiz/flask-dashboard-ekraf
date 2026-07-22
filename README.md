@@ -142,6 +142,17 @@ Panduan konfigurasi production dan import tersedia di [SECURITY.md](SECURITY.md)
 python -m unittest discover -s tests -v
 ```
 
+## Deploy ke Render dengan Docker
+
+Repository sudah menyediakan `Dockerfile`, health check `/healthz`, dan `render.yaml`.
+
+1. Push repository ke GitHub/GitLab.
+2. Di Render pilih **New → Blueprint**, lalu pilih repository ini.
+3. Isi `DATABASE_URL`, `BOOTSTRAP_ADMIN_USERNAME`, dan `BOOTSTRAP_ADMIN_PASSWORD` saat diminta. `SECRET_KEY` dibuat otomatis oleh Render.
+4. Setelah admin pertama berhasil dibuat, kosongkan dua environment variable bootstrap admin.
+
+Konfigurasi lain sudah memiliki default production yang aman. Service dijalankan dengan satu worker Gunicorn dan empat thread agar penggunaan RAM tetap ringan serta cache proses tetap konsisten.
+
 ---
 
 ## 📄 Lisensi

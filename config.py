@@ -58,16 +58,19 @@ DATABASE_URL = os.getenv("DATABASE_URL", "").strip()
 if not DATABASE_URL.startswith(("postgresql://", "postgres://")):
     raise RuntimeError("DATABASE_URL PostgreSQL wajib diisi melalui environment atau file .env.")
 DATABASE_SCHEMA = os.getenv("DATABASE_SCHEMA", "public").strip()
+DATABASE_POOL_SIZE = int(os.getenv("DATABASE_POOL_SIZE", "5"))
 if not DATABASE_SCHEMA.replace("_", "").isalnum():
     raise RuntimeError("DATABASE_SCHEMA tidak valid.")
+if not 1 <= DATABASE_POOL_SIZE <= 20:
+    raise RuntimeError("DATABASE_POOL_SIZE harus berada pada rentang 1–20.")
 GEOJSON_DIR = _resolve_path(os.getenv("GEOJSON_DIR", "geojson"))
 LOG_DIR = _resolve_path(os.getenv("LOG_DIR", "logs"))
 
 # ── CORS ────────────────────────────────────────────────────────
 _origins_value = os.getenv("ALLOWED_ORIGINS", "").strip()
-if IS_PRODUCTION and not _origins_value:
-    raise RuntimeError("ALLOWED_ORIGINS wajib ditentukan pada environment production.")
-ALLOWED_ORIGINS = _origins_value or "http://localhost:5000,http://127.0.0.1:5000"
+ALLOWED_ORIGINS = _origins_value or (
+    "http://localhost:5000,http://127.0.0.1:5000,http://localhost" if not IS_PRODUCTION else ""
+)
 CORS_SUPPORTS_CREDENTIALS = _env_bool("CORS_SUPPORTS_CREDENTIALS", False)
 if IS_PRODUCTION and "*" in {origin.strip() for origin in ALLOWED_ORIGINS.split(",")}:
     raise RuntimeError("Wildcard CORS tidak diizinkan pada production.")

@@ -24,6 +24,31 @@ const App = {
     currentPage: "overview-page",
     currentFilter: { kecamatan: [], kelurahan: [], subsektor: [], search: "" },
 
+    loadScript(src) {
+        const existing = document.querySelector(`script[src="${src}"]`);
+        if (existing) return existing.dataset.loaded === "true"
+            ? Promise.resolve()
+            : new Promise((resolve, reject) => {
+                existing.addEventListener("load", resolve, { once: true });
+                existing.addEventListener("error", reject, { once: true });
+            });
+        return new Promise((resolve, reject) => {
+            const script = document.createElement("script");
+            script.src = src;
+            script.onload = () => { script.dataset.loaded = "true"; resolve(); };
+            script.onerror = () => reject(new Error(`Gagal memuat ${src}`));
+            document.head.appendChild(script);
+        });
+    },
+
+    loadStyle(href) {
+        if (document.querySelector(`link[href="${href}"]`)) return;
+        const link = document.createElement("link");
+        link.rel = "stylesheet";
+        link.href = href;
+        document.head.appendChild(link);
+    },
+
     escapeHTML(value) {
         return String(value ?? "").replace(/[&<>'"]/g, char => ({
             "&": "&amp;",
@@ -74,7 +99,7 @@ const App = {
     },
 
     // ── Navigation ────────────────────────────────────
-    switchPage(targetId, updateState = true) {
+    switchPage(targetId, updateState = true, refreshData = true) {
         if (targetId !== "overview-page" &&
             typeof DensityMap !== "undefined" && DensityMap &&
             typeof densityHeatLayer !== "undefined" && densityHeatLayer) {
@@ -123,14 +148,19 @@ const App = {
                 }
             }
 
-            if (targetId === "overview-page") {
+            if (refreshData && targetId === "overview-page") {
                 if (typeof refreshOverview === "function") refreshOverview();
             }
 
-            if (targetId === "table-page" &&
-                typeof dataTableInstance !== "undefined" && dataTableInstance) {
-                dataTableInstance.columns.adjust();
-                if (dataTableInstance.responsive) dataTableInstance.responsive.recalc();
+            if (targetId === "table-page" && typeof ensureTablePage === "function") {
+                ensureTablePage().then(() => {
+                    dataTableInstance?.columns.adjust();
+                    dataTableInstance?.responsive?.recalc();
+                }).catch(err => App.showToast("Error", err.message));
+            }
+
+            if (refreshData && targetId === "manage-page" && typeof refreshKelolaList === "function") {
+                refreshKelolaList();
             }
         }, 250);
 
@@ -177,9 +207,9 @@ const App = {
             document.getElementById("kpi-valid").textContent = kpi.total_valid.toLocaleString("id-ID");
             document.getElementById("active-count").textContent = kpi.total_pelaku.toLocaleString("id-ID");
 
-            if (typeof refreshOverview === "function") refreshOverview();
-            if (typeof refreshTable === "function") refreshTable();
-            if (typeof refreshKelolaList === "function") refreshKelolaList();
+            if (App.currentPage === "overview-page" && typeof refreshOverview === "function") refreshOverview();
+            if (App.currentPage === "table-page" && typeof ensureTablePage === "function") await ensureTablePage();
+            if (App.currentPage === "manage-page" && typeof refreshKelolaList === "function") refreshKelolaList();
 
             App.showToast("Sukses", `Menampilkan ${kpi.total_pelaku} data pelaku.`);
 
@@ -362,8 +392,6 @@ document.addEventListener("DOMContentLoaded", () => {
     App.loadDropdownOptions().then(() => {
         // Wire kecamatan onChange AFTER Tom Select instances are created
         tsKecamatan.on("change", tsKecamatan_onChange);
-        App.applyFilters();
-
         const initialPath = window.location.pathname;
         const pathMap = {
             "/clustering": "dbscan-page",
@@ -371,6 +399,9 @@ document.addEventListener("DOMContentLoaded", () => {
             "/kelola": "manage-page",
             "/tentang": "tentang-page"
         };
-        App.switchPage(pathMap[initialPath] || "overview-page", false);
+        const initialPage = pathMap[initialPath] || "overview-page";
+        App.currentPage = initialPage;
+        App.switchPage(initialPage, false, false);
+        App.applyFilters();
     });
 });

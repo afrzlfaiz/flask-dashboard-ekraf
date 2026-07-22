@@ -23,8 +23,8 @@ from config import (
     MAX_UPLOAD_ROWS,
     MAX_UPLOAD_UNCOMPRESSED_MB,
 )
-from utils.data_loader import load_data
-from utils.database import connect_db, record_audit, transaction, utcnow
+from utils.data_loader import invalidate_data_cache, load_data
+from utils.database import connection, record_audit, transaction, utcnow
 from utils.filtering import apply_filters
 
 ALLOWED_EXTENSIONS = {".xlsx"}
@@ -266,8 +266,7 @@ def upload_excel():
 @api_bp.route("/upload/<batch_id>", methods=["GET"])
 @role_required("operator")
 def import_preview(batch_id):
-    conn = connect_db()
-    try:
+    with connection() as conn:
         batch, error = _batch_access(conn, batch_id)
         if error:
             return error
@@ -276,22 +275,17 @@ def import_preview(batch_id):
             "batch": _serialize_batch(batch),
             "preview": _preview_rows(conn, batch_id),
         })
-    finally:
-        conn.close()
 
 
 @api_bp.route("/upload/<batch_id>/commit", methods=["POST"])
 @role_required("operator")
 def import_commit(batch_id):
-    access_conn = connect_db()
-    try:
+    with connection() as access_conn:
         batch, error = _batch_access(access_conn, batch_id)
         if error:
             return error
         if batch["status"] != "preview":
             return jsonify({"success": False, "message": "Batch tidak berada pada status preview."}), 409
-    finally:
-        access_conn.close()
 
     with transaction() as conn:
         batch = conn.execute("SELECT * FROM import_batches WHERE id = %s", (batch_id,)).fetchone()
@@ -333,6 +327,7 @@ def import_commit(batch_id):
             conn, action="import_commit", entity="import_batch", entity_id=batch_id,
             new_value={"inserted": inserted}, **_audit_context(),
         )
+    invalidate_data_cache()
     return jsonify({
         "success": True,
         "message": f"{inserted} data valid berhasil diimpor.",
@@ -386,14 +381,14 @@ def import_rollback(batch_id):
             conn, action="import_rollback", entity="import_batch", entity_id=batch_id,
             old_value={"record_ids": [row["id"] for row in rows]}, **_audit_context(),
         )
+    invalidate_data_cache()
     return jsonify({"success": True, "message": f"Rollback selesai: {len(rows)} data dinonaktifkan."})
 
 
 @api_bp.route("/upload/<batch_id>/errors", methods=["GET"])
 @role_required("operator")
 def import_errors(batch_id):
-    conn = connect_db()
-    try:
+    with connection() as conn:
         batch, error = _batch_access(conn, batch_id)
         if error:
             return error
@@ -403,8 +398,6 @@ def import_errors(batch_id):
                ORDER BY row_number""",
             (batch_id,),
         ).fetchall()
-    finally:
-        conn.close()
     output = StringIO()
     writer = csv.writer(output)
     writer.writerow(["baris", "status", "kesalahan", "data"])

@@ -2,6 +2,7 @@
  * tabel.js — DataTables page with server-side data + export.
  */
 let dataTableInstance = null;
+let tableDependenciesPromise = null;
 const tableSortKeys = [
     "id",
     "nama_usaha",
@@ -60,7 +61,6 @@ function initDataTable() {
         autoWidth: false,
         processing: true,
         serverSide: true,
-        deferLoading: 0,
         searchDelay: 350,
         pageLength: 10,
         lengthMenu: [10, 25, 50, 100],
@@ -129,6 +129,21 @@ function initDataTable() {
     });
 }
 
+function ensureTablePage() {
+    if (dataTableInstance) return Promise.resolve();
+    if (tableDependenciesPromise) return tableDependenciesPromise;
+
+    App.loadStyle("https://cdn.datatables.net/1.13.7/css/dataTables.bootstrap5.min.css");
+    App.loadStyle("https://cdn.datatables.net/responsive/2.5.0/css/responsive.bootstrap5.min.css");
+    tableDependenciesPromise = App.loadScript("https://code.jquery.com/jquery-3.7.0.min.js")
+        .then(() => App.loadScript("https://cdn.datatables.net/1.13.7/js/jquery.dataTables.min.js"))
+        .then(() => App.loadScript("https://cdn.datatables.net/1.13.7/js/dataTables.bootstrap5.min.js"))
+        .then(() => App.loadScript("https://cdn.datatables.net/responsive/2.5.0/js/dataTables.responsive.min.js"))
+        .then(() => App.loadScript("https://cdn.datatables.net/responsive/2.5.0/js/responsive.bootstrap5.min.js"))
+        .then(initDataTable);
+    return tableDependenciesPromise;
+}
+
 function refreshTable() {
     if (!dataTableInstance) return;
     dataTableInstance.ajax.reload(null, true);
@@ -136,8 +151,6 @@ function refreshTable() {
 
 // Export buttons
 document.addEventListener("DOMContentLoaded", () => {
-    initDataTable();
-
     document.getElementById("btn-export-csv").addEventListener("click", () => {
         window.open(`/api/export?format=csv&${App.buildFilterQuery()}`, "_blank");
     });

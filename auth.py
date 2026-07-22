@@ -10,7 +10,7 @@ from flask_login import LoginManager, UserMixin, current_user
 from werkzeug.security import check_password_hash, generate_password_hash
 
 from config import BOOTSTRAP_ADMIN_PASSWORD, BOOTSTRAP_ADMIN_USERNAME
-from utils.database import connect_db, initialize_database, transaction, utcnow
+from utils.database import connection, initialize_database, transaction, utcnow
 
 logger = logging.getLogger(__name__)
 login_manager = LoginManager()
@@ -44,14 +44,11 @@ class User(UserMixin):
 
 @login_manager.user_loader
 def load_user(user_id):
-    conn = connect_db()
-    try:
+    with connection() as conn:
         row = conn.execute(
             "SELECT id, username, role, is_active, must_change_password FROM users WHERE id = %s",
             (int(user_id),),
         ).fetchone()
-    finally:
-        conn.close()
     if row and row["is_active"]:
         return User(
             row["id"], row["username"], row["role"], bool(row["is_active"]),

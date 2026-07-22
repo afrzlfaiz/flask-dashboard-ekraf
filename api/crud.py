@@ -11,7 +11,8 @@ from flask_login import current_user, login_required
 from api import api_bp
 from auth import role_required
 from config import KECAMATAN_LIST, SUBSECTOR_COLORS
-from utils.database import connect_db, record_audit, row_as_dict, transaction, utcnow
+from utils.database import connection, record_audit, row_as_dict, transaction, utcnow
+from utils.data_loader import invalidate_data_cache
 
 API_TO_DB = {
     "nama_narasumber": "Nama Narasumber",
@@ -193,13 +194,10 @@ def _audit_context():
 def crud_list():
     include_inactive = request.args.get("include_inactive") == "1" and current_user.has_role("admin")
     where = "1 = 1" if include_inactive else "is_active = 1"
-    conn = connect_db()
-    try:
+    with connection() as conn:
         rows = conn.execute(
             f"SELECT * FROM pelaku_ekraf WHERE {where} ORDER BY is_active DESC, id DESC"
         ).fetchall()
-    finally:
-        conn.close()
     return jsonify({"data": [serialize_actor(row) for row in rows]})
 
 
@@ -226,6 +224,7 @@ def crud_create():
             conn, action="create", entity="pelaku_ekraf", entity_id=new_id,
             new_value=clean, **_audit_context(),
         )
+    invalidate_data_cache()
     return jsonify({"success": True, "id": new_id, "message": "Data berhasil ditambahkan."}), 201
 
 
@@ -253,6 +252,7 @@ def crud_update(actor_id):
             conn, action="update", entity="pelaku_ekraf", entity_id=actor_id,
             old_value=row_as_dict(old), new_value=clean, **_audit_context(),
         )
+    invalidate_data_cache()
     return jsonify({"success": True, "message": "Data berhasil diperbarui."})
 
 
@@ -274,6 +274,7 @@ def crud_delete(actor_id):
             conn, action="soft_delete", entity="pelaku_ekraf", entity_id=actor_id,
             old_value=row_as_dict(old), **_audit_context(),
         )
+    invalidate_data_cache()
     return jsonify({"success": True, "message": "Data berhasil dinonaktifkan."})
 
 
@@ -295,6 +296,7 @@ def crud_restore(actor_id):
             conn, action="restore", entity="pelaku_ekraf", entity_id=actor_id,
             old_value=row_as_dict(old), **_audit_context(),
         )
+    invalidate_data_cache()
     return jsonify({"success": True, "message": "Data berhasil dipulihkan."})
 
 
@@ -318,4 +320,5 @@ def crud_purge(actor_id):
             old_value=row_as_dict(old), **_audit_context(),
         )
         conn.execute("DELETE FROM pelaku_ekraf WHERE id = %s", (actor_id,))
+    invalidate_data_cache()
     return jsonify({"success": True, "message": "Data dihapus permanen melalui prosedur khusus."})

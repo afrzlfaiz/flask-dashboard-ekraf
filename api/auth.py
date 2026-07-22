@@ -8,7 +8,7 @@ from werkzeug.security import check_password_hash, generate_password_hash
 
 from api import api_bp
 from auth import User
-from utils.database import connect_db, record_audit, transaction, utcnow
+from utils.database import connection, record_audit, transaction, utcnow
 
 MAX_FAILED_ATTEMPTS = 5
 LOCKOUT_MINUTES = 15
@@ -20,16 +20,13 @@ def _client_ip() -> str:
 
 def _is_rate_limited(username: str, ip_address: str) -> bool:
     cutoff = (datetime.now().astimezone() - timedelta(minutes=LOCKOUT_MINUTES)).isoformat(timespec="seconds")
-    conn = connect_db()
-    try:
+    with connection() as conn:
         count = conn.execute(
             """SELECT COUNT(*) AS total FROM login_attempts
                WHERE username = %s AND ip_address = %s AND succeeded = 0 AND attempted_at >= %s""",
             (username, ip_address, cutoff),
         ).fetchone()["total"]
         return count >= MAX_FAILED_ATTEMPTS
-    finally:
-        conn.close()
 
 
 @api_bp.route("/auth/login", methods=["POST"])
@@ -136,14 +133,11 @@ def list_users():
     result = wrapped()
     if result is not None:
         return result
-    conn = connect_db()
-    try:
+    with connection() as conn:
         rows = conn.execute(
             "SELECT id, username, role, is_active, created_at, last_login_at FROM users WHERE is_active = 1 ORDER BY id"
         ).fetchall()
         return jsonify({"success": True, "users": [dict(r) for r in rows]})
-    finally:
-        conn.close()
 
 
 @api_bp.route("/auth/users", methods=["POST"])

@@ -197,11 +197,14 @@ async function updateDensityHeatmap() {
 async function renderCharts() {
     const q = App.buildFilterQuery();
     const plotConfig = { responsive: true, displayModeBar: false };
+    await App.loadScript("https://cdn.plot.ly/plotly-basic-2.27.0.min.js");
+    const chartsResp = await fetch(`/api/charts?${q}`);
+    if (!chartsResp.ok) throw new Error(`Server merespons ${chartsResp.status}`);
+    const charts = await chartsResp.json();
 
     // Donut: Kecamatan distribution
     try {
-        const resp = await fetch(`/api/chart/kecamatan?${q}`);
-        const d = await resp.json();
+        const d = charts.kecamatan;
         const donutContainer = document.getElementById("kecamatan-donut-chart");
         if (!donutContainer || donutContainer.offsetWidth === 0 || App.currentPage !== "overview-page") return;
         Plotly.react(donutContainer, [{
@@ -220,8 +223,7 @@ async function renderCharts() {
 
     // Bar: Subsektor
     try {
-        const resp = await fetch(`/api/chart/subsektor?${q}`);
-        const d = await resp.json();
+        const d = charts.subsektor;
         const barContainer = document.getElementById("subsektor-bar-chart");
         if (!barContainer || barContainer.offsetWidth === 0 || App.currentPage !== "overview-page") return;
         Plotly.react(barContainer, [{
@@ -247,8 +249,7 @@ async function renderCharts() {
 
     // Top 10 Kelurahan
     try {
-        const resp = await fetch(`/api/chart/kelurahan?${q}`);
-        const d = await resp.json();
+        const d = charts.kelurahan;
         const container = document.getElementById("top-kelurahan-list");
         container.innerHTML = "";
         if (!d.labels.length) {

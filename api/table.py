@@ -7,7 +7,7 @@ from flask import jsonify, request
 from flask_login import current_user
 
 from api import api_bp
-from utils.database import connect_db
+from utils.database import connection
 
 
 MAX_PAGE_SIZE = 100
@@ -137,8 +137,7 @@ def table_data():
         LIMIT %s OFFSET %s
     """
 
-    conn = connect_db()
-    try:
+    with connection() as conn:
         records_total = conn.execute(
             "SELECT COUNT(*) AS total FROM pelaku_ekraf WHERE is_active = 1"
         ).fetchone()["total"]
@@ -146,8 +145,6 @@ def table_data():
             f"SELECT COUNT(*) AS total FROM pelaku_ekraf WHERE {where_sql}", params
         ).fetchone()["total"]
         page_rows = conn.execute(data_sql, [*params, per_page, offset]).fetchall()
-    finally:
-        conn.close()
 
     can_view_pii = current_user.is_authenticated and current_user.has_role("operator")
     rows = [_serialize_row(row, offset + index + 1, can_view_pii=can_view_pii) for index, row in enumerate(page_rows)]
