@@ -42,24 +42,24 @@ function initDBScanMap() {
 }
 
 async function runDBSCAN() {
-    const eps = parseFloat(document.getElementById("dbscan-eps").value);
+    const epsMeters = parseFloat(document.getElementById("dbscan-eps").value);
     const minSamples = parseInt(document.getElementById("dbscan-min-samples").value);
 
     try {
         const clusterLayer = initDBScanMap();
         if (!clusterLayer) throw new Error("Peta klaster belum siap. Muat ulang halaman dan coba kembali.");
-        if (!Number.isFinite(eps) || !Number.isInteger(minSamples)) {
+        if (!Number.isFinite(epsMeters) || !Number.isInteger(minSamples)) {
             throw new Error("Parameter Epsilon dan Min Samples tidak valid.");
         }
 
-        const body = { ...App.getFilterParams(), eps, min_samples: minSamples };
+        const body = { ...App.getFilterParams(), eps: epsMeters, min_samples: minSamples };
         const resp = await fetch("/api/dbscan", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(body),
         });
         const result = await resp.json();
-        if (!resp.ok) throw new Error(result.message || `Server merespons ${resp.status}.`);
+        if (!resp.ok) throw new Error(result.error || result.message || `Server merespons ${resp.status}.`);
         if (!Array.isArray(result.points) || !Array.isArray(result.cluster_details)) {
             throw new Error("Format hasil DBSCAN tidak valid.");
         }
@@ -177,38 +177,67 @@ function renderClusterProfiles(result) {
     });
 }
 
+function clearOptimalDBSCANResults() {
+    const results = document.getElementById("dbscan-optimal-results");
+    const tableBody = document.getElementById("dbscan-optimal-table-body");
+    const hint = document.getElementById("dbscan-optimal-hint");
+    results?.classList.add("d-none");
+    if (tableBody) tableBody.innerHTML = "";
+    if (hint) hint.textContent = "";
+}
+
+function renderOptimalDBSCANResults(result) {
+    const results = document.getElementById("dbscan-optimal-results");
+    const tableBody = document.getElementById("dbscan-optimal-table-body");
+    tableBody.innerHTML = result.candidates.map(candidate => `
+        <tr>
+            <td><span class="badge ${candidate.rank === 1 ? "bg-warning text-dark" : "bg-secondary"}">#${candidate.rank}</span></td>
+            <td>${candidate.eps_meters} m <small class="text-muted">(${candidate.eps_kilometers} km)</small></td>
+            <td>${candidate.min_samples}</td>
+            <td>${candidate.silhouette.toFixed(4)}</td>
+            <td><strong>${candidate.balanced_score.toFixed(4)}</strong></td>
+            <td>${candidate.n_clusters}</td>
+            <td>${candidate.n_noise} <small class="text-muted">(${candidate.noise_percent.toFixed(1)}%)</small></td>
+            <td class="text-end">
+                <button class="btn btn-primary btn-sm" type="button"
+                        data-use-dbscan-eps-meters="${candidate.eps_meters}"
+                        data-use-dbscan-min-samples="${candidate.min_samples}">
+                    Gunakan
+                </button>
+            </td>
+        </tr>`).join("");
+    results.classList.remove("d-none");
+}
+
 async function findOptimalDBSCAN() {
     const btn = document.getElementById("btn-optimal-dbscan");
     const hint = document.getElementById("dbscan-optimal-hint");
     const icon = btn.querySelector("i");
 
+    clearOptimalDBSCANResults();
     btn.disabled = true;
     icon.className = "bi bi-hourglass-split spin";
-    hint.textContent = "Mencari parameter optimal...";
+    hint.textContent = "Mengevaluasi 120 kombinasi parameter...";
 
     try {
         const body = { ...App.getFilterParams() };
+        const filterSignature = JSON.stringify(body);
         const resp = await fetch("/api/dbscan/optimal", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(body),
         });
         const result = await resp.json();
-        if (!resp.ok) throw new Error(result.message || `Server merespons ${resp.status}.`);
+        if (!resp.ok) throw new Error(result.error || result.message || `Server merespons ${resp.status}.`);
+        if (!Array.isArray(result.candidates)) throw new Error("Format kandidat parameter tidak valid.");
+        if (filterSignature !== JSON.stringify(App.getFilterParams())) return;
 
-        if (result.best_score <= 0) {
-            hint.textContent = "Tidak ditemukan klaster dengan noise ≤ 50%. Coba longgarkan filter data.";
+        if (!result.candidates.length) {
+            hint.textContent = "Tidak ditemukan kombinasi dengan 2–15 klaster, silhouette positif, dan noise ≤ 50%.";
         } else {
-            document.getElementById("dbscan-eps").value = result.best_eps;
-            document.getElementById("dbscan-min-samples").value = result.best_min_samples;
-            // find noise ratio from the best result
-            const bestResult = result.results.find(r => r.eps === result.best_eps && r.min_samples === result.best_min_samples);
-            const noisePct = bestResult ? Math.round(bestResult.noise_ratio * 100) : "?";
-            hint.textContent = `Optimal: eps=${result.best_eps}, min_samples=${result.best_min_samples} | silhouette=${result.best_score}, ${result.best_n_clusters} klaster, noise ${noisePct}%`;
+            renderOptimalDBSCANResults(result);
+            hint.textContent = `${result.candidates.length} kandidat terbaik dari ${result.combinations_evaluated} kombinasi dan ${result.total_points} titik.`;
         }
-
-        // auto-run with optimal params
-        await runDBSCAN();
     } catch (err) {
         hint.textContent = "Gagal: " + err.message;
     } finally {
@@ -221,4 +250,11 @@ document.addEventListener("DOMContentLoaded", () => {
     // DBSCAN map is lazily initialized when the page is first shown (see app.js switchPage)
     document.getElementById("btn-run-dbscan").addEventListener("click", runDBSCAN);
     document.getElementById("btn-optimal-dbscan").addEventListener("click", findOptimalDBSCAN);
+    document.getElementById("dbscan-optimal-table-body").addEventListener("click", async event => {
+        const button = event.target.closest("[data-use-dbscan-eps-meters]");
+        if (!button) return;
+        document.getElementById("dbscan-eps").value = button.dataset.useDbscanEpsMeters;
+        document.getElementById("dbscan-min-samples").value = button.dataset.useDbscanMinSamples;
+        await runDBSCAN();
+    });
 });

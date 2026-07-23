@@ -190,6 +190,7 @@ const App = {
 
     async applyFilters() {
         App.currentFilter = App.getFilterParams();
+        if (typeof clearOptimalDBSCANResults === "function") clearOptimalDBSCANResults();
         const applyButton = document.getElementById("btn-apply-filter");
         const refreshButton = document.getElementById("btn-refresh-data");
         applyButton.disabled = true;

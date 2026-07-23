@@ -1,5 +1,12 @@
-"""POST /api/dbscan — run DBSCAN clustering with user params. POST /api/dbscan/optimal — grid search best eps & min_samples via silhouette score."""
-import math
+"""DBSCAN spatial clustering API.
+
+POST /api/dbscan runs DBSCAN with an epsilon radius expressed in meters.
+POST /api/dbscan/optimal searches epsilon candidates expressed in meters.
+
+Coordinates and epsilon must be angular radians for Haversine. User-facing
+epsilon values are meters and are converted by dividing by Earth's radius.
+"""
+from math import isfinite
 
 from flask import jsonify, request
 
@@ -7,6 +14,54 @@ from api import api_bp
 from config import DATABASE_URL
 from utils.data_loader import load_data
 from utils.filtering import apply_filters
+
+EARTH_RADIUS_METERS = 6_371_008.8
+EPS_VALUES_METERS = (
+    100, 150, 200, 250, 300, 400, 500, 650, 800, 1000,
+    1250, 1500, 2000, 2500, 3000,
+)
+MIN_SAMPLES_VALUES = (4, 5, 6, 8, 10, 12, 15, 20)
+
+
+def _meters_to_radians(eps_meters):
+    return eps_meters / EARTH_RADIUS_METERS
+
+
+def _parse_dbscan_parameters(body):
+    raw_eps = body.get("eps", 800.0)
+    raw_min_samples = body.get("min_samples", 4)
+
+    try:
+        if isinstance(raw_eps, bool):
+            raise ValueError
+        eps_meters = float(raw_eps)
+    except (TypeError, ValueError):
+        raise ValueError("Parameter eps harus berupa angka.") from None
+
+    if not isfinite(eps_meters) or not 1 <= eps_meters <= 10_000:
+        raise ValueError(
+            "Parameter eps harus berada pada rentang 1 sampai 10000 meter."
+        )
+
+    try:
+        if isinstance(raw_min_samples, bool):
+            raise ValueError
+        min_samples_number = float(raw_min_samples)
+    except (TypeError, ValueError):
+        raise ValueError(
+            "Parameter min_samples harus berupa bilangan bulat minimal 2."
+        ) from None
+
+    if (
+        not isfinite(min_samples_number)
+        or not min_samples_number.is_integer()
+        or min_samples_number < 2
+    ):
+        raise ValueError(
+            "Parameter min_samples harus berupa bilangan bulat minimal 2."
+        )
+
+    return eps_meters, int(min_samples_number)
 
 
 @api_bp.route("/dbscan", methods=["POST"])
@@ -33,21 +88,35 @@ def dbscan():
         "search_text": body.get("search", ""),
     }
 
-    # Parse DBSCAN params — user enters eps in degrees, convert to radians for haversine
-    eps_degrees = float(body.get("eps", 0.008))
-    eps_radians = math.radians(eps_degrees)
-    min_samples = int(body.get("min_samples", 4))
+    try:
+        eps_meters, min_samples = _parse_dbscan_parameters(body)
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
+
+    eps_radians = _meters_to_radians(eps_meters)
+    parameters = {
+        "eps_meters": eps_meters,
+        "min_samples": min_samples,
+        "distance_metric": "haversine",
+    }
 
     df, _ = load_data(DATABASE_URL)
     filtered = apply_filters(df, **filters)
 
-    # Override DBSCAN params temporarily
-    import utils.clustering as cl
     import numpy as np
 
     data = filtered.dropna(subset=["lat", "lon"]).copy()
     if data.empty:
-        return jsonify({"n_clusters": 0, "n_noise": 0, "n_total": 0, "points": [], "summary": [], "cluster_details": []})
+        return jsonify({
+            "n_clusters": 0,
+            "n_noise": 0,
+            "n_total": 0,
+            "n_clustered": 0,
+            "points": [],
+            "summary": [],
+            "cluster_details": [],
+            "parameters": parameters,
+        })
 
     coords = np.radians(data[["lat", "lon"]].values)
 
@@ -132,12 +201,13 @@ def dbscan():
         "n_clustered": len(data) - n_noise,
         "points": points,
         "cluster_details": cluster_details,
+        "parameters": parameters,
     })
 
 
 @api_bp.route("/dbscan/optimal", methods=["POST"])
 def dbscan_optimal():
-    """Grid search eps × min_samples maximizing silhouette score (haversine)."""
+    """Return the five best balanced DBSCAN parameter combinations."""
     import itertools
 
     import numpy as np
@@ -165,53 +235,87 @@ def dbscan_optimal():
     data = filtered.dropna(subset=["lat", "lon"]).copy()
 
     if data.empty:
-        return jsonify({"best_eps": 0.008, "best_min_samples": 4, "best_score": 0, "best_n_clusters": 0, "results": []})
+        return jsonify({
+            "total_points": 0,
+            "combinations_evaluated": 0,
+            "candidates": [],
+        })
 
     coords = np.radians(data[["lat", "lon"]].values)
     n = len(coords)
 
     # ── Search grid ─────────────────────────────────────────────
-    eps_values = [round(v, 4) for v in np.linspace(0.0005, 0.04, 25)]  # degrees (~55m – 4.4km)
-    min_samples_values = [2, 3, 4, 5, 6, 7, 8, 10, 12, 15]
     MAX_NOISE_RATIO = 0.5   # reject combos where > 50% points are noise
     MAX_CLUSTERS = 15       # reject combos with too many tiny clusters
 
-    best = {"eps": 0.008, "min_samples": 4, "score": -1, "n_clusters": 0}
-    all_results = []
+    candidates = []
 
-    for eps_deg, ms in itertools.product(eps_values, min_samples_values):
-        eps_rad = math.radians(eps_deg)
-        model = DBSCAN(eps=eps_rad, min_samples=ms, metric="haversine")
+    for eps_meters, min_samples in itertools.product(
+        EPS_VALUES_METERS,
+        MIN_SAMPLES_VALUES,
+    ):
+        eps_radians = _meters_to_radians(eps_meters)
+        model = DBSCAN(
+            eps=eps_radians,
+            min_samples=min_samples,
+            metric="haversine",
+        )
         labels = model.fit_predict(coords)
 
-        n_clusters = len(set(labels)) - (1 if -1 in labels else 0)
+        mask = labels != -1
+        clustered_labels = labels[mask]
+        unique_clustered_labels = np.unique(clustered_labels)
+        n_clusters = len(unique_clustered_labels)
         n_noise = int((labels == -1).sum())
-        n_clustered = n - n_noise
         noise_ratio = n_noise / n if n > 0 else 0
 
-        # only score combos with 2–15 clusters, ≥ 2 clustered points, and noise ≤ 50%
-        score = None
-        if 2 <= n_clusters <= MAX_CLUSTERS and n_clustered >= 2 and noise_ratio <= MAX_NOISE_RATIO:
-            mask = labels != -1
-            score = float(silhouette_score(coords[mask], labels[mask], metric="haversine"))
+        if (
+            not 2 <= n_clusters <= MAX_CLUSTERS
+            or noise_ratio > MAX_NOISE_RATIO
+            or mask.sum() <= len(unique_clustered_labels)
+        ):
+            continue
 
-        result = {
-            "eps": eps_deg,
-            "min_samples": ms,
-            "n_clusters": n_clusters,
-            "n_noise": n_noise,
-            "noise_ratio": round(noise_ratio, 3),
-            "silhouette": round(score, 4) if score is not None else None,
-        }
-        all_results.append(result)
+        try:
+            silhouette = float(silhouette_score(coords[mask], labels[mask], metric="haversine"))
+        except ValueError:
+            continue
 
-        if score is not None and score > best["score"]:
-            best = {"eps": eps_deg, "min_samples": ms, "score": score, "n_clusters": n_clusters}
+        if silhouette > 0:
+            candidates.append({
+                "eps_meters": eps_meters,
+                "min_samples": min_samples,
+                "n_clusters": n_clusters,
+                "n_noise": n_noise,
+                "noise_ratio": noise_ratio,
+                "silhouette": silhouette,
+                "balanced_score": silhouette * (1 - noise_ratio),
+            })
+
+    candidates.sort(key=lambda item: (
+        -item["balanced_score"],
+        -item["silhouette"],
+        item["n_noise"],
+        item["eps_meters"],
+        item["min_samples"],
+    ))
+    top_candidates = [{
+        "rank": rank,
+        # Compatibility field: eps is now expressed in meters.
+        "eps": item["eps_meters"],
+        "eps_meters": item["eps_meters"],
+        "eps_kilometers": round(item["eps_meters"] / 1000, 3),
+        "min_samples": item["min_samples"],
+        "silhouette": round(item["silhouette"], 4),
+        "balanced_score": round(item["balanced_score"], 4),
+        "n_clusters": item["n_clusters"],
+        "n_noise": item["n_noise"],
+        "noise_ratio": round(item["noise_ratio"], 4),
+        "noise_percent": round(item["noise_ratio"] * 100, 1),
+    } for rank, item in enumerate(candidates[:5], start=1)]
 
     return jsonify({
-        "best_eps": best["eps"],
-        "best_min_samples": best["min_samples"],
-        "best_score": round(best["score"], 4),
-        "best_n_clusters": best["n_clusters"],
-        "results": all_results,
+        "total_points": n,
+        "combinations_evaluated": len(EPS_VALUES_METERS) * len(MIN_SAMPLES_VALUES),
+        "candidates": top_candidates,
     })
