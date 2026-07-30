@@ -147,9 +147,9 @@
                             </select>
                         </div>
                         <div class="filter-field filter-field-wide">
-                            <label class="form-label" for="filter-kelurahan">Kelurahan <small>(bisa lebih dari satu)</small></label>
+                            <label class="form-label" for="filter-kelurahan">Lokasi <small>(pilih kelurahan)</small></label>
                             <select class="form-select rounded-3" id="filter-kelurahan">
-                                <option value="">Semua Kelurahan</option>
+                                <option value="">Semua Lokasi</option>
                             </select>
                         </div>
                         <div class="filter-field filter-field-wide">
@@ -166,12 +166,17 @@
                             </div>
                         </div>
                         <div class="filter-actions">
-                            <button class="btn btn-outline-secondary" id="btn-reset-filter" type="button">
-                                <i class="bi bi-arrow-counterclockwise" aria-hidden="true"></i><span>Reset</span>
+                            <button class="btn btn-outline-primary btn-malang" id="btn-filter-malang" type="button" aria-pressed="false" disabled>
+                                <i class="bi bi-geo-alt-fill" aria-hidden="true"></i><span>Kota Malang</span>
                             </button>
-                            <button class="btn btn-primary" id="btn-apply-filter" type="button">
-                                <i class="bi bi-check2" aria-hidden="true"></i><span>Terapkan</span>
-                            </button>
+                            <div class="filter-actions-row">
+                                <button class="btn btn-outline-secondary" id="btn-reset-filter" type="button">
+                                    <i class="bi bi-arrow-counterclockwise" aria-hidden="true"></i><span>Reset</span>
+                                </button>
+                                <button class="btn btn-primary" id="btn-apply-filter" type="button">
+                                    <i class="bi bi-check2" aria-hidden="true"></i><span>Terapkan</span>
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>

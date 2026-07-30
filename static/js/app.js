@@ -20,9 +20,34 @@ const tsBaseConfig = (placeholder) => ({
     },
 });
 
+const tsLocationConfig = (locations) => {
+    const config = tsBaseConfig("Semua Lokasi");
+    const kecamatan = [...new Set(locations.map(location => location.kecamatan))];
+    const options = locations.map(location => ({
+        ...location,
+        value: `${location.kecamatan}\u001f${location.kelurahan}`,
+    }));
+
+    return {
+        ...config,
+        valueField: "value",
+        labelField: "kelurahan",
+        searchField: ["kelurahan", "kecamatan"],
+        optgroupField: "kecamatan",
+        options,
+        optgroups: kecamatan.map(value => ({ value, label: value })),
+        render: {
+            ...config.render,
+            optgroup_header: (data, escape) =>
+                `<div class="optgroup-header"><i class="bi bi-geo-alt-fill" aria-hidden="true"></i>${escape(data.label)}</div>`,
+        },
+    };
+};
+
 const App = {
     currentPage: "overview-page",
     currentFilter: { kecamatan: [], kelurahan: [], subsektor: [], search: "" },
+    malangDistricts: [],
 
     loadScript(src) {
         const existing = document.querySelector(`script[src="${src}"]`);
@@ -170,9 +195,15 @@ const App = {
 
     // ── Filters ───────────────────────────────────────
     getFilterParams() {
+        const selectedLocations = (tsKelurahan?.items || [])
+            .map(value => tsKelurahan.options[value])
+            .filter(Boolean);
+
         return {
-            kecamatan: tsKecamatan?.items || [],
-            kelurahan: tsKelurahan?.items || [],
+            kecamatan: selectedLocations.length
+                ? [...new Set(selectedLocations.map(location => location.kecamatan))]
+                : (tsKecamatan?.items || []),
+            kelurahan: selectedLocations.map(location => location.kelurahan),
             subsektor: tsSubsektor?.items || [],
             search: document.getElementById("filter-search").value,
         };
@@ -186,6 +217,53 @@ const App = {
         p.subsektor.forEach(v => params.append("subsektor", v));
         if (p.search) params.set("search", p.search);
         return params.toString();
+    },
+
+    setLocationOptions(locations, selected = []) {
+        tsKelurahan?.destroy();
+        document.getElementById("filter-kelurahan").innerHTML = "";
+        tsKelurahan = new TomSelect("#filter-kelurahan", tsLocationConfig(locations));
+
+        const available = new Set(
+            locations.map(location => `${location.kecamatan}\u001f${location.kelurahan}`)
+        );
+        tsKelurahan.setValue(selected.filter(value => available.has(value)), true);
+    },
+
+    syncMalangButton() {
+        const selected = new Set(tsKecamatan?.items || []);
+        const active = App.malangDistricts.length === 5
+            && selected.size === 5
+            && App.malangDistricts.every(kecamatan => selected.has(kecamatan));
+        const button = document.getElementById("btn-filter-malang");
+        button.classList.toggle("active", active);
+        button.setAttribute("aria-pressed", String(active));
+    },
+
+    async applyMalangFilter() {
+        if (App.malangDistricts.length !== 5) return;
+
+        const button = document.getElementById("btn-filter-malang");
+        const previousLocations = tsKelurahan?.items || [];
+        button.disabled = true;
+
+        try {
+            tsKecamatan.setValue(App.malangDistricts, true);
+            App.syncMalangButton();
+            const response = await fetch("/api/filter", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ kecamatan: App.malangDistricts }),
+            });
+            if (!response.ok) throw new Error(`Server merespons ${response.status}`);
+            const result = await response.json();
+            App.setLocationOptions(result.options?.lokasi || [], previousLocations);
+            await App.applyFilters();
+        } catch (err) {
+            App.showToast("Error", "Gagal menerapkan filter Kota Malang: " + err.message);
+        } finally {
+            button.disabled = false;
+        }
     },
 
     async applyFilters() {
@@ -230,24 +308,17 @@ const App = {
     async resetFilters() {
         tsKecamatan?.clear(true);
         tsSubsektor?.clear(true);
+        App.syncMalangButton();
         document.getElementById("filter-search").value = "";
-
-        // Rebuild kelurahan with full options
-        tsKelurahan?.destroy();
-        const kelSel = document.getElementById("filter-kelurahan");
-        kelSel.innerHTML = '<option value="">Semua Kelurahan</option>';
 
         try {
             const response = await fetch("/api/filter", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({}) });
             const result = await response.json();
-            const opts = result.options?.kelurahan || [];
-            opts.forEach(k => kelSel.add(new Option(k, k)));
+            App.setLocationOptions(result.options?.lokasi || []);
         } catch (err) {
-            console.error("Failed to reset kelurahan options:", err);
-        } finally {
-            tsKelurahan = new TomSelect("#filter-kelurahan", tsBaseConfig("Semua Kelurahan"));
-            await App.applyFilters();
+            console.error("Failed to reset location options:", err);
         }
+        await App.applyFilters();
     },
 
     // ── Init dropdowns ─────────────────────────────────
@@ -256,21 +327,21 @@ const App = {
             const resp = await fetch("/api/filter", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({}) });
             const result = await resp.json();
             const opts = result.options || {};
+            App.malangDistricts = opts.kota_malang || [];
 
             // Kecamatan
             const kecSel = document.getElementById("filter-kecamatan");
             opts.kecamatan?.forEach(k => kecSel.add(new Option(k, k)));
             tsKecamatan = new TomSelect("#filter-kecamatan", tsBaseConfig("Semua Kecamatan"));
+            document.getElementById("btn-filter-malang").disabled = App.malangDistricts.length !== 5;
 
             // Subsektor
             const subSel = document.getElementById("filter-subsektor");
             opts.subsektor?.forEach(s => subSel.add(new Option(s, s)));
             tsSubsektor = new TomSelect("#filter-subsektor", tsBaseConfig("Semua Subsektor"));
 
-            // Kelurahan
-            const kelSel = document.getElementById("filter-kelurahan");
-            opts.kelurahan?.forEach(k => kelSel.add(new Option(k, k)));
-            tsKelurahan = new TomSelect("#filter-kelurahan", tsBaseConfig("Semua Kelurahan"));
+            // Lokasi: kelurahan dikelompokkan berdasarkan kecamatan
+            App.setLocationOptions(opts.lokasi || []);
 
             // CRUD form selects (plain, no Tom Select)
             const crudKec = document.getElementById("crud-kecamatan");
@@ -316,6 +387,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     // Buttons
     document.getElementById("btn-apply-filter").addEventListener("click", () => App.applyFilters());
+    document.getElementById("btn-filter-malang").addEventListener("click", () => App.applyMalangFilter());
     document.getElementById("btn-reset-filter").addEventListener("click", () => App.resetFilters());
     document.getElementById("btn-refresh-data").addEventListener("click", () => {
         App.applyFilters();
@@ -335,29 +407,20 @@ document.addEventListener("DOMContentLoaded", () => {
         }, 160);
     });
 
-    // Kecamatan change → rebuild kelurahan options
+    // Kecamatan change → rebuild grouped location options
     tsKecamatan_onChange = function () {
         const selected = tsKecamatan?.items || [];
         const prevSelected = tsKelurahan?.items || [];
-
-        tsKelurahan.destroy();
-        const kelSel = document.getElementById("filter-kelurahan");
-        kelSel.innerHTML = '<option value="">Semua Kelurahan</option>';
+        App.syncMalangButton();
 
         const body = selected.length ? { kecamatan: selected } : {};
         fetch("/api/filter", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) })
             .then(r => r.json())
             .then(result => {
-                (result.options?.kelurahan || []).forEach(k => {
-                    kelSel.add(new Option(k, k));
-                });
-                tsKelurahan = new TomSelect("#filter-kelurahan", tsBaseConfig("Semua Kelurahan"));
-                tsKelurahan.setValue(prevSelected.filter(v => {
-                    return Array.from(kelSel.options).some(o => o.value === v);
-                }));
+                App.setLocationOptions(result.options?.lokasi || [], prevSelected);
             })
             .catch(() => {
-                tsKelurahan = new TomSelect("#filter-kelurahan", tsBaseConfig("Semua Kelurahan"));
+                App.setLocationOptions([], prevSelected);
             });
     };
 

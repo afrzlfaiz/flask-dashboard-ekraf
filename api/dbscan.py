@@ -245,8 +245,8 @@ def dbscan_optimal():
     n = len(coords)
 
     # ── Search grid ─────────────────────────────────────────────
-    MAX_NOISE_RATIO = 0.5   # reject combos where > 50% points are noise
-    MAX_CLUSTERS = 15       # reject combos with too many tiny clusters
+    MAX_NOISE_RATIO = 0.5
+    MAX_CLUSTERS = 25
 
     candidates = []
 

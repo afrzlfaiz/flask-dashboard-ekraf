@@ -630,7 +630,14 @@ button,
 
 .filter-actions {
     display: flex;
-    align-items: flex-end;
+    flex-direction: column;
+    align-items: stretch;
+    justify-content: flex-end;
+    gap: 0.5rem;
+}
+
+.filter-actions-row {
+    display: flex;
     justify-content: flex-end;
     gap: 0.5rem;
 }
@@ -713,6 +720,23 @@ button,
 
 .ts-wrapper .ts-dropdown .option {
     padding: 0.6rem 0.75rem;
+}
+
+.ts-wrapper .ts-dropdown .optgroup-header {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.65rem 0.75rem 0.35rem;
+    color: #526477;
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    background: #f8fafc;
+}
+
+.ts-wrapper .ts-dropdown .optgroup:not(:first-child) {
+    border-top: 1px solid var(--border-color);
 }
 
 .ts-wrapper .ts-dropdown .active {
@@ -1434,6 +1458,10 @@ button,
     }
 
     .filter-actions {
+        align-items: stretch;
+    }
+
+    .filter-actions-row {
         display: grid;
         grid-template-columns: 0.8fr 1.2fr;
     }

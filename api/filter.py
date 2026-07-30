@@ -3,10 +3,10 @@ from flask import jsonify, request
 from flask_login import current_user
 
 from api import api_bp
-from config import DATABASE_URL
+from config import DATABASE_URL, KECAMATAN_LIST
 from utils.data_loader import load_data
 from utils.filtering import apply_filters
-from utils.helper import get_kelurahan_options
+from utils.helper import get_kelurahan_options, get_location_options
 
 
 @api_bp.route("/filter", methods=["POST"])
@@ -33,6 +33,7 @@ def filter_data():
 
     # Dropdown options — dynamic from actual data
     kelurahan_options = get_kelurahan_options(df, kecamatan_list or None)
+    location_options = get_location_options(df, kecamatan_list or None)
     dynamic_kecamatan = sorted(df["Kecamatan"].dropna().unique().tolist())
     dynamic_subsektor = sorted(df["Sub Sektor"].dropna().unique().tolist())
 
@@ -43,5 +44,7 @@ def filter_data():
             "kecamatan": dynamic_kecamatan,
             "subsektor": dynamic_subsektor,
             "kelurahan": kelurahan_options,
+            "lokasi": location_options,
+            "kota_malang": KECAMATAN_LIST,
         },
     })

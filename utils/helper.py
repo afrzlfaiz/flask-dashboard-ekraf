@@ -62,6 +62,23 @@ def get_kelurahan_options(df: pd.DataFrame, kecamatan_list: list[str] | None = N
     return sorted(filtered["Kelurahan"].dropna().unique().tolist())
 
 
+def get_location_options(
+    df: pd.DataFrame, kecamatan_list: list[str] | None = None
+) -> list[dict[str, str]]:
+    """Pasangan kecamatan-kelurahan untuk pilihan lokasi berkelompok."""
+    if kecamatan_list:
+        df = df[df["Kecamatan"].isin(kecamatan_list)]
+
+    return (
+        df[["Kecamatan", "Kelurahan"]]
+        .dropna()
+        .drop_duplicates()
+        .sort_values(["Kecamatan", "Kelurahan"])
+        .rename(columns={"Kecamatan": "kecamatan", "Kelurahan": "kelurahan"})
+        .to_dict("records")
+    )
+
+
 def format_filter_info(n_filtered: int, n_total: int) -> str:
     """Teks informasi: 'Menampilkan 78 dari 312 pelaku'."""
     return f"Menampilkan {n_filtered} dari {n_total} pelaku"
