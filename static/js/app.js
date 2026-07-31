@@ -343,9 +343,13 @@ const App = {
             // Lokasi: kelurahan dikelompokkan berdasarkan kecamatan
             App.setLocationOptions(opts.lokasi || []);
 
-            // CRUD form selects (plain, no Tom Select)
-            const crudKec = document.getElementById("crud-kecamatan");
-            opts.kecamatan?.forEach(k => crudKec.add(new Option(k, k)));
+            // CRUD form suggestions; inputs still accept new values.
+            const crudKecList = document.getElementById("crud-kecamatan-options");
+            opts.kecamatan?.forEach(k => {
+                const option = document.createElement("option");
+                option.value = k;
+                crudKecList.appendChild(option);
+            });
 
             const crudSub = document.getElementById("crud-subsektor");
             opts.subsektor?.forEach(s => crudSub.add(new Option(s, s)));
@@ -424,17 +428,19 @@ document.addEventListener("DOMContentLoaded", () => {
             });
     };
 
-    // CRUD kecamatan → kelurahan (plain select)
+    // CRUD kecamatan → kelurahan suggestions
     document.getElementById("crud-kecamatan").addEventListener("change", async function () {
         const kec = this.value;
-        const kelSel = document.getElementById("crud-kelurahan");
-        kelSel.innerHTML = '<option value="">Pilih...</option>';
+        const kelList = document.getElementById("crud-kelurahan-options");
+        kelList.innerHTML = "";
         if (kec) {
             try {
                 const resp = await fetch("/api/filter", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ kecamatan: kec }) });
                 const result = await resp.json();
                 result.options?.kelurahan?.forEach(k => {
-                    kelSel.add(new Option(k, k));
+                    const option = document.createElement("option");
+                    option.value = k;
+                    kelList.appendChild(option);
                 });
             } catch (e) { /* ignore */ }
         }

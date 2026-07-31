@@ -10,7 +10,7 @@ from flask_login import current_user, login_required
 
 from api import api_bp
 from auth import role_required
-from config import KECAMATAN_LIST, SUBSECTOR_COLORS
+from config import SUBSECTOR_COLORS
 from utils.database import connection, record_audit, row_as_dict, transaction, utcnow
 from utils.data_loader import invalidate_data_cache
 
@@ -62,16 +62,7 @@ def _canonical_payload(body: dict) -> dict:
     return result
 
 
-def _reference_values(conn):
-    kelurahan_rows = conn.execute(
-        'SELECT DISTINCT "Kecamatan", "Kelurahan" FROM pelaku_ekraf '
-        'WHERE is_active = 1 AND "Kelurahan" IS NOT NULL'
-    ).fetchall()
-    kelurahan_by_kecamatan: dict[str, set[str]] = {}
-    for row in kelurahan_rows:
-        kelurahan_by_kecamatan.setdefault(str(row["Kecamatan"]).strip(), set()).add(
-            str(row["Kelurahan"]).strip()
-        )
+def _subsector_values(conn):
     subsektor = set(SUBSECTOR_COLORS)
     subsektor.update(
         str(row["subsektor"]).strip() for row in conn.execute(
@@ -79,7 +70,7 @@ def _reference_values(conn):
             'WHERE is_active = 1 AND "Sub Sektor" IS NOT NULL'
         )
     )
-    return kelurahan_by_kecamatan, subsektor
+    return subsektor
 
 
 def validate_actor_payload(body: dict, conn) -> tuple[dict, list[str]]:
@@ -141,14 +132,7 @@ def validate_actor_payload(body: dict, conn) -> tuple[dict, list[str]]:
     if phone and (not phone.isdigit() or not 8 <= len(phone) <= 16):
         errors.append("Format nomor HP/WA tidak valid.")
 
-    kelurahan_by_kecamatan, subsektor_values = _reference_values(conn)
-    kecamatan = payload.get("kecamatan", "")
-    kelurahan = payload.get("kelurahan", "")
-    if kecamatan and kecamatan not in KECAMATAN_LIST:
-        errors.append("Kecamatan tidak terdapat pada referensi Kota Malang.")
-    if kecamatan in kelurahan_by_kecamatan and kelurahan:
-        if kelurahan not in kelurahan_by_kecamatan[kecamatan]:
-            errors.append("Kelurahan tidak sesuai dengan kecamatan yang dipilih.")
+    subsektor_values = _subsector_values(conn)
     if payload.get("subsektor") and payload["subsektor"] not in subsektor_values:
         errors.append("Subsektor tidak terdapat pada referensi resmi.")
 

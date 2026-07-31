@@ -53,10 +53,10 @@ const Kelola = {
             document.getElementById("crud-nama-narasumber").value = actor.nama_narasumber;
             document.getElementById("crud-nama-usaha").value = actor.nama_usaha;
             document.getElementById("crud-kecamatan").value = actor.kecamatan;
+            document.getElementById("crud-kelurahan").value = actor.kelurahan;
 
-            // Trigger kelurahan load
+            // Refresh suggestions without replacing the current value.
             document.getElementById("crud-kecamatan").dispatchEvent(new Event("change"));
-            setTimeout(() => { document.getElementById("crud-kelurahan").value = actor.kelurahan; }, 300);
 
             document.getElementById("crud-alamat").value = actor.alamat || "";
             document.getElementById("crud-latitude").value = actor.latitude || "";

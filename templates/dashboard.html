@@ -279,16 +279,14 @@
                             <input type="text" class="form-control rounded-3" id="crud-nama-usaha" required>
                         </div>
                         <div class="col-12 col-sm-6">
-                            <label class="form-label text-muted small fw-bold">KECAMATAN</label>
-                            <select class="form-select rounded-3" id="crud-kecamatan" required>
-                                <option value="">Pilih...</option>
-                            </select>
+                            <label class="form-label text-muted small fw-bold" for="crud-kecamatan">KECAMATAN</label>
+                            <input type="text" class="form-control rounded-3" id="crud-kecamatan" list="crud-kecamatan-options" placeholder="Pilih atau ketik kecamatan baru" autocomplete="off" required>
+                            <datalist id="crud-kecamatan-options"></datalist>
                         </div>
                         <div class="col-12 col-sm-6">
-                            <label class="form-label text-muted small fw-bold">KELURAHAN</label>
-                            <select class="form-select rounded-3" id="crud-kelurahan" required>
-                                <option value="">Pilih...</option>
-                            </select>
+                            <label class="form-label text-muted small fw-bold" for="crud-kelurahan">KELURAHAN</label>
+                            <input type="text" class="form-control rounded-3" id="crud-kelurahan" list="crud-kelurahan-options" placeholder="Pilih atau ketik kelurahan baru" autocomplete="off" required>
+                            <datalist id="crud-kelurahan-options"></datalist>
                         </div>
                         <div class="col-12">
                             <label class="form-label text-muted small fw-bold">ALAMAT LENGKAP</label>
