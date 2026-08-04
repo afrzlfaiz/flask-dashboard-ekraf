@@ -110,7 +110,7 @@ def table_data():
 
     dashboard_search = request.args.get("search", "").strip()[:200]
     if dashboard_search:
-        clauses.append('COALESCE("Nama Narasumber", \'\') LIKE %s ESCAPE \'\\\'')
+        clauses.append('COALESCE("Nama Narasumber", \'\') ILIKE %s ESCAPE \'\\\'')
         params.append(_like_pattern(dashboard_search))
 
     quick_search = request.args.get("quick_search", "").strip()[:200]
@@ -118,7 +118,7 @@ def table_data():
         pattern = _like_pattern(quick_search)
         clauses.append(
             "(" + " OR ".join(
-                f"COALESCE({column}, '') LIKE %s ESCAPE '\\'"
+                f"COALESCE({column}, '') ILIKE %s ESCAPE '\\'"
                 for column in QUICK_SEARCH_COLUMNS
             ) + ")"
         )
