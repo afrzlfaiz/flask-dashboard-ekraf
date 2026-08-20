@@ -35,6 +35,21 @@ BUSINESS_COLUMNS = [
 ]
 
 
+def _template_file(fmt: str) -> tuple[BytesIO, str]:
+    """Build a blank import template with the exact accepted column headers."""
+    dataframe = pd.DataFrame(columns=BUSINESS_COLUMNS)
+    buffer = BytesIO()
+    if fmt == "xlsx":
+        with pd.ExcelWriter(buffer, engine="openpyxl") as writer:
+            dataframe.to_excel(writer, index=False, sheet_name="Data Ekraf")
+        mimetype = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    else:
+        buffer.write(dataframe.to_csv(index=False).encode("utf-8-sig"))
+        mimetype = "text/csv"
+    buffer.seek(0)
+    return buffer, mimetype
+
+
 def _audit_context():
     return {
         "user_id": int(current_user.id),
@@ -133,6 +148,21 @@ def _preview_rows(conn, batch_id: str, limit: int = 50) -> list[dict]:
             "subsektor": data.get("Sub Sektor", ""),
         })
     return result
+
+
+@api_bp.route("/upload/template")
+@role_required("operator")
+def upload_template():
+    fmt = request.args.get("format", "xlsx").lower()
+    if fmt not in {"csv", "xlsx"}:
+        return jsonify({"success": False, "message": "Format template harus csv atau xlsx."}), 400
+    buffer, mimetype = _template_file(fmt)
+    return send_file(
+        buffer,
+        mimetype=mimetype,
+        as_attachment=True,
+        download_name=f"template-data-ekraf.{fmt}",
+    )
 
 
 @api_bp.route("/upload", methods=["POST"])
