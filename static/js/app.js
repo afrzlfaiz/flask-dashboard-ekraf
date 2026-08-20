@@ -396,7 +396,9 @@ document.addEventListener("DOMContentLoaded", () => {
     document.getElementById("btn-refresh-data").addEventListener("click", () => {
         App.applyFilters();
     });
-    document.getElementById("filter-search").addEventListener("keydown", event => {
+    const filterSearch = document.getElementById("filter-search");
+    filterSearch.addEventListener("focus", () => filterSearch.removeAttribute("readonly"), { once: true });
+    filterSearch.addEventListener("keydown", event => {
         if (event.key === "Enter") {
             event.preventDefault();
             App.applyFilters();
