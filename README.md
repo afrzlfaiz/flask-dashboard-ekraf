@@ -144,17 +144,20 @@ python scripts/manage_users.py create nama_admin --role admin
 
 Panduan konfigurasi production dan import tersedia di [SECURITY.md](SECURITY.md).
 
-## Deploy ke Render dengan Docker
+## Deploy ke Render dengan GHCR
 
-Repository sudah menyediakan `Dockerfile`, health check `/healthz`, dan `render.yaml`.
+Repository menyediakan `Dockerfile`, GitHub Actions, health check `/healthz`, dan `render.yaml`. Alurnya: test → build image → push ke GHCR → panggil Render Deploy Hook.
 
-1. Push repository ke GitHub/GitLab.
-2. Di Render pilih **New → Blueprint**, lalu pilih repository ini.
-3. Isi `DATABASE_URL`, `BOOTSTRAP_ADMIN_USERNAME`, dan `BOOTSTRAP_ADMIN_PASSWORD` saat diminta. `SECRET_KEY` dibuat otomatis oleh Render.
-4. Setelah admin pertama berhasil dibuat, kosongkan dua environment variable bootstrap admin.
-5. Di Render buka **Settings → Deploy Hook**, buat hook baru, lalu simpan URL-nya di GitHub pada **Settings → Secrets and variables → Actions** dengan nama `RENDER_DEPLOY_HOOK_URL`. Workflow akan menjalankan test lalu memicu deploy setiap push ke branch `main`.
+1. Push repository ke GitHub.
+2. Buat **GitHub Personal Access Token** dengan izin `read:packages`.
+3. Di Render tambahkan registry credential bernama `ghcr-dashboard-ekraf` untuk `ghcr.io`, menggunakan username GitHub dan token tersebut.
+4. Di Render pilih **New → Blueprint**, lalu pilih repository ini. `render.yaml` akan menggunakan image `ghcr.io/afrzlfaiz/flask-dashboard-ekraf:latest`.
+5. Isi `DATABASE_URL`, `BOOTSTRAP_ADMIN_USERNAME`, dan `BOOTSTRAP_ADMIN_PASSWORD` saat diminta. `SECRET_KEY` dibuat otomatis oleh Render.
+6. Setelah admin pertama berhasil dibuat, kosongkan dua environment variable bootstrap admin.
+7. Di Render buka **Settings → Deploy Hook**, buat hook baru, lalu simpan URL-nya di GitHub pada **Settings → Secrets and variables → Actions** dengan nama `RENDER_DEPLOY_HOOK_URL`.
+8. Push ke branch `main`. GitHub Actions menggunakan `GITHUB_TOKEN` bawaan untuk push image ke GHCR, lalu memicu deploy Render.
 
-Konfigurasi lain sudah memiliki default production yang aman. Service dijalankan dengan satu worker Gunicorn dan empat thread agar penggunaan RAM tetap ringan serta cache proses tetap konsisten.
+Konfigurasi lain sudah memiliki default production yang aman. Auto-deploy Render dimatikan agar tidak terjadi deploy ganda; deployment dilakukan setelah image berhasil dipush ke GHCR dan hook dipanggil.
 
 ---
 

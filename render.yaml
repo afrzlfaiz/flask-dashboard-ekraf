@@ -1,10 +1,15 @@
 services:
   - type: web
     name: dashboard-ekraf-malang
-    runtime: docker
+    runtime: image
     region: singapore
     healthCheckPath: /healthz
     autoDeployTrigger: off
+    image:
+      url: ghcr.io/afrzlfaiz/flask-dashboard-ekraf:latest
+      creds:
+        fromRegistryCreds:
+          name: ghcr-dashboard-ekraf
     envVars:
       - key: FLASK_ENV
         value: production
