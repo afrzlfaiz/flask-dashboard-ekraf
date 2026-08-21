@@ -1,0 +1,23 @@
+{% extends "survey.html" %}
+
+{% block page_title %}Survei {{ period.survey_year }}{% endblock %}
+{% block page_heading %}Survei {{ period.survey_year }}{% endblock %}
+{% block page_description %}Analisis ringkas dan hasil clustering per pelaku untuk {{ period.label }}.{% endblock %}
+
+{% block survey_content %}
+<div id="survey-period-page" data-period-year="{{ period.survey_year }}">
+    <div class="survey-period-toolbar mb-4">
+        <div>
+            <a class="small text-decoration-none" href="{{ url_for('survey_page') }}"><i class="bi bi-arrow-left me-1"></i>Semua periode</a>
+            <div class="small text-muted mt-2">{{ period.source_filename }} · {{ period.rows }} baris · hasil analisis disimpan di database</div>
+        </div>
+        <span class="badge rounded-pill bg-success-subtle text-success-emphasis" id="survey-analysis-status">{{ period.analysis_status }}</span>
+    </div>
+
+    {% include "_survey_panel.html" %}
+</div>
+{% endblock %}
+
+{% block page_scripts %}
+<script src="{{ url_for('static', filename='js/survey.js') }}"></script>
+{% endblock %}

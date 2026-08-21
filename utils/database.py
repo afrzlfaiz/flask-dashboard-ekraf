@@ -33,6 +33,18 @@ USER_COLUMNS = {
     "must_change_password": "INTEGER NOT NULL DEFAULT 0",
 }
 
+SURVEY_PERIOD_COLUMNS = {
+    "analysis_status": "TEXT NOT NULL DEFAULT 'pending'",
+    "analysis_version": "TEXT",
+    "analysis_meta_json": "TEXT",
+    "analysis_completed_at": "TEXT",
+    "analysis_error": "TEXT",
+}
+
+SURVEY_ANALYSIS_RESULT_COLUMNS = {
+    "rasio_barang_tetap": "DOUBLE PRECISION",
+}
+
 _pool = ConnectionPool(
     conninfo=DATABASE_URL,
     min_size=0,
@@ -169,9 +181,15 @@ def initialize_database(database_url: str | None = None) -> None:
                 created_at TEXT NOT NULL,
                 created_by BIGINT,
                 updated_at TEXT,
-                updated_by BIGINT
+                updated_by BIGINT,
+                analysis_status TEXT NOT NULL DEFAULT 'pending',
+                analysis_version TEXT,
+                analysis_meta_json TEXT,
+                analysis_completed_at TEXT,
+                analysis_error TEXT
             )
         """)
+        _ensure_columns(conn, "survey_periods", SURVEY_PERIOD_COLUMNS)
         conn.execute(f"""
             CREATE TABLE IF NOT EXISTS survey_responses (
                 id BIGSERIAL PRIMARY KEY,
@@ -184,6 +202,39 @@ def initialize_database(database_url: str | None = None) -> None:
                 FOREIGN KEY (period_id) REFERENCES survey_periods(id) ON DELETE CASCADE
             )
         """)
+        conn.execute(f"""
+            CREATE TABLE IF NOT EXISTS survey_analysis_results (
+                id BIGSERIAL PRIMARY KEY,
+                period_id BIGINT NOT NULL,
+                response_id BIGINT NOT NULL,
+                row_number INTEGER NOT NULL,
+                nama_usaha TEXT,
+                subsektor TEXT,
+                klasifikasi_umkm TEXT,
+                kecamatan TEXT,
+                kelurahan TEXT,
+                cluster_id INTEGER,
+                cluster_label TEXT NOT NULL,
+                status TEXT NOT NULL,
+                pc1 DOUBLE PRECISION,
+                pc2 DOUBLE PRECISION,
+                penjualan_tahunan DOUBLE PRECISION,
+                margin_profit DOUBLE PRECISION,
+                tenaga_kerja DOUBLE PRECISION,
+                barang_tetap DOUBLE PRECISION,
+                rasio_barang_tetap DOUBLE PRECISION,
+                rasio_bahan_baku DOUBLE PRECISION,
+                rasio_utilitas DOUBLE PRECISION,
+                rasio_penggajian DOUBLE PRECISION,
+                tekanan_biaya_terpilih DOUBLE PRECISION,
+                analysis_version TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                UNIQUE (period_id, response_id),
+                FOREIGN KEY (period_id) REFERENCES survey_periods(id) ON DELETE CASCADE,
+                FOREIGN KEY (response_id) REFERENCES survey_responses(id) ON DELETE CASCADE
+            )
+        """)
+        _ensure_columns(conn, "survey_analysis_results", SURVEY_ANALYSIS_RESULT_COLUMNS)
 
         conn.execute(f"""
             CREATE TABLE IF NOT EXISTS audit_logs (
@@ -266,6 +317,8 @@ def initialize_database(database_url: str | None = None) -> None:
             "CREATE INDEX IF NOT EXISTS idx_survey_period_year ON survey_periods(survey_year)",
             "CREATE UNIQUE INDEX IF NOT EXISTS idx_survey_period_hash ON survey_periods(file_sha256)",
             "CREATE INDEX IF NOT EXISTS idx_survey_response_period ON survey_responses(period_id, row_number)",
+            "CREATE INDEX IF NOT EXISTS idx_survey_analysis_period_cluster ON survey_analysis_results(period_id, cluster_label)",
+            "CREATE INDEX IF NOT EXISTS idx_survey_analysis_period_row ON survey_analysis_results(period_id, row_number)",
         ):
             conn.execute(statement)
 

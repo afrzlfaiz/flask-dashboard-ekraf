@@ -115,7 +115,35 @@ def create_app(test_config=None):
             return redirect(url_for("admin_login_page", redirect="/survei"))
         if not current_user.has_role("admin"):
             return redirect(url_for("dashboard"))
-        return render_template("survey.html")
+        from utils.survey_loader import load_survey_periods
+
+        return render_template("survey_index.html", periods=load_survey_periods())
+
+    @app.route("/survei/periode-<int:survey_year>")
+    def survey_period_page(survey_year: int):
+        if not current_user.is_authenticated:
+            return redirect(url_for("admin_login_page", redirect=f"/survei/periode-{survey_year}"))
+        if not current_user.has_role("admin"):
+            return redirect(url_for("dashboard"))
+        from utils.survey_loader import get_survey_period
+
+        try:
+            period = get_survey_period(survey_year)
+        except LookupError as error:
+            return error_response(404, str(error))
+        return render_template("survey_period.html", period=period)
+
+    @app.route("/survei/kelola")
+    def survey_manage_page():
+        if not current_user.is_authenticated:
+            return redirect(url_for("admin_login_page", redirect="/survei/kelola"))
+        if not current_user.has_role("admin"):
+            return redirect(url_for("dashboard"))
+        from utils.survey_loader import load_survey_periods
+
+        return render_template(
+            "survey_manage.html", periods=load_survey_periods(), survey_section="manage"
+        )
 
     @app.route("/healthz")
     def healthz():

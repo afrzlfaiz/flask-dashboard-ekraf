@@ -1,0 +1,66 @@
+{% extends "survey.html" %}
+
+{% block page_title %}Kelola Data Survei{% endblock %}
+{% block page_heading %}Kelola Data Survei{% endblock %}
+{% block page_description %}Tambahkan survei tahun berikutnya tanpa menggabungkan hasil dengan periode lain.{% endblock %}
+
+{% block survey_content %}
+<section class="card custom-card section-card-body mb-4">
+    <div class="section-heading mb-4">
+        <span class="section-icon section-icon-warm"><i class="bi bi-cloud-arrow-up-fill"></i></span>
+        <div><h2>Upload Survei Tahun Baru</h2><p>Periode, respons mentah, dan hasil clustering disimpan atomik. Hasil siap dibuka setelah analisis berhasil.</p></div>
+    </div>
+    <form id="survey-import-form" novalidate>
+        <div class="row g-3 align-items-end">
+            <div class="col-12 col-md-3">
+                <label class="form-label" for="survey-year-input">Tahun survei</label>
+                <input class="form-control rounded-3" id="survey-year-input" name="survey_year" type="number" min="2026" max="2100" placeholder="2027" required>
+            </div>
+            <div class="col-12 col-md-5">
+                <label class="form-label" for="survey-label-input">Label periode <span class="text-muted fw-normal">(opsional)</span></label>
+                <input class="form-control rounded-3" id="survey-label-input" name="label" type="text" placeholder="Survei Tahunan Ekraf 2027" maxlength="160">
+            </div>
+            <div class="col-12 col-md-4">
+                <label class="form-label" for="survey-file-input">File XLSX</label>
+                <input class="form-control rounded-3" id="survey-file-input" name="file" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" required>
+            </div>
+        </div>
+        <div class="d-flex flex-wrap align-items-center gap-3 mt-3">
+            <button class="btn btn-primary rounded-3" id="btn-import-survey" type="submit"><i class="bi bi-database-up me-1"></i>Simpan dan Analisis</button>
+            <span class="small text-muted">Sheet: <strong>Sheet6</strong> · Maksimum file mengikuti konfigurasi aplikasi.</span>
+        </div>
+    </form>
+    <div id="survey-import-alert" class="alert d-none mt-3 mb-0 py-2 small" role="alert"></div>
+</section>
+
+<section class="card custom-card section-card-body">
+    <div class="section-toolbar mb-3">
+        <div class="section-heading compact"><span class="section-icon"><i class="bi bi-list-check"></i></span><div><h2>Status Periode</h2><p>Setiap periode memiliki respons dan hasil analisis sendiri.</p></div></div>
+        <a class="btn btn-outline-primary btn-sm rounded-3" href="{{ url_for('survey_page') }}">Lihat periode</a>
+    </div>
+    <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+            <thead class="table-light"><tr><th>Tahun</th><th>Periode</th><th class="text-end">Baris</th><th class="text-end">Lengkap</th><th>Status analisis</th><th>Selesai</th><th></th></tr></thead>
+            <tbody id="survey-manage-periods">
+            {% for period in periods %}
+                <tr>
+                    <td class="fw-semibold">{{ period.survey_year }}</td>
+                    <td><div>{{ period.label }}</div><small class="text-muted">{{ period.source_filename }}</small></td>
+                    <td class="text-end">{{ period.rows }}</td>
+                    <td class="text-end">{{ period.valid_rows }}</td>
+                    <td><span class="badge {% if period.analysis_status == 'ready' %}bg-success-subtle text-success-emphasis{% elif period.analysis_status == 'failed' %}bg-danger-subtle text-danger-emphasis{% else %}bg-warning-subtle text-warning-emphasis{% endif %}">{{ period.analysis_status }}</span></td>
+                    <td class="small text-muted">{{ period.analysis_completed_at or '—' }}</td>
+                    <td class="text-end"><a href="{{ url_for('survey_period_page', survey_year=period.survey_year) }}" class="btn btn-sm btn-outline-secondary rounded-3">Buka</a></td>
+                </tr>
+            {% else %}
+                <tr><td colspan="7" class="text-center text-muted py-4">Belum ada periode survei.</td></tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</section>
+{% endblock %}
+
+{% block page_scripts %}
+<script src="{{ url_for('static', filename='js/survey-manage.js') }}"></script>
+{% endblock %}

@@ -39,6 +39,7 @@ FEATURE_LABELS = {
 # Parameter final yang sudah dipilih pada notebook 7 fitur + RobustScaler.
 FINAL_EPS = 2.187
 FINAL_MIN_SAMPLES = 12
+ANALYSIS_VERSION = "ekraf-7fitur-robustscaler-dbscan-v2"
 
 _RENAME_MAP = {
     "Nama Usaha": "nama_usaha",
@@ -386,6 +387,11 @@ def _prepare(raw: pd.DataFrame, path: Path, metadata: dict | None = None) -> dic
 
 
 def _period_payload(row) -> dict:
+    analysis_meta = row.get("analysis_meta_json")
+    try:
+        analysis_meta = json.loads(analysis_meta) if analysis_meta else {}
+    except (TypeError, json.JSONDecodeError):
+        analysis_meta = {}
     return {
         "id": int(row["id"]),
         "survey_year": int(row["survey_year"]),
@@ -396,6 +402,11 @@ def _period_payload(row) -> dict:
         "rows": int(row["total_rows"]),
         "valid_rows": int(row["valid_rows"]),
         "created_at": row["created_at"],
+        "analysis_status": row.get("analysis_status") or "pending",
+        "analysis_version": row.get("analysis_version"),
+        "analysis_meta": analysis_meta,
+        "analysis_completed_at": row.get("analysis_completed_at"),
+        "analysis_error": row.get("analysis_error"),
     }
 
 
@@ -406,7 +417,9 @@ def load_survey_periods() -> list[dict]:
     with connection() as conn:
         rows = conn.execute(
             """SELECT id, survey_year, label, source_filename, source_sheet,
-                      file_sha256, status, total_rows, valid_rows, created_at
+                      file_sha256, status, total_rows, valid_rows, created_at,
+                      analysis_status, analysis_version, analysis_meta_json,
+                      analysis_completed_at, analysis_error
                FROM survey_periods
                WHERE status = 'active'
                ORDER BY survey_year DESC, id DESC"""
@@ -420,6 +433,287 @@ def invalidate_survey_cache(period_id: int | None = None) -> None:
             _cache.clear()
         else:
             _cache.pop(int(period_id), None)
+
+
+def _analysis_meta(prepared: dict) -> dict:
+    return {
+        "name": "7 fitur + RobustScaler + DBSCAN",
+        "eps": FINAL_EPS,
+        "min_samples": FINAL_MIN_SAMPLES,
+        "silhouette": prepared["silhouette"],
+        "pca_explained": prepared["pca_explained"],
+    }
+
+
+def _analysis_records(prepared: dict, response_rows) -> list[dict]:
+    response_by_row = {
+        int(row["row_number"]): int(row["id"])
+        for row in response_rows
+    }
+    modeled_by_row = {
+        int(row["survey_row_number"]): row
+        for _, row in prepared["model_df"].iterrows()
+    }
+
+    records = []
+    for _, source in prepared["df"].iterrows():
+        row_number = int(source["survey_row_number"])
+        response_id = response_by_row.get(row_number)
+        if response_id is None:
+            raise ValueError(f"Respons survei untuk baris {row_number} tidak ditemukan.")
+
+        model = modeled_by_row.get(row_number)
+        if model is None:
+            cluster_id = None
+            cluster_label = "Tidak terpetakan"
+            status = "Data tidak lengkap"
+        else:
+            cluster_id = int(model["cluster_id"])
+            cluster_label = str(model["cluster"])
+            status = "Noise" if cluster_id == -1 else "Terpetakan"
+
+        records.append({
+            "response_id": response_id,
+            "row_number": row_number,
+            "nama_usaha": _json_scalar(source.get("nama_usaha")),
+            "subsektor": _json_scalar(source.get("subsektor_ringkas")),
+            "klasifikasi_umkm": _json_scalar(source.get("klasifikasi_umkm")),
+            "kecamatan": _json_scalar(source.get("kecamatan")),
+            "kelurahan": _json_scalar(source.get("kelurahan")),
+            "cluster_id": cluster_id,
+            "cluster_label": cluster_label,
+            "status": status,
+            "pc1": _json_scalar(model.get("pc1")) if model is not None else None,
+            "pc2": _json_scalar(model.get("pc2")) if model is not None else None,
+            "penjualan_tahunan": _json_scalar(model.get("penjualan_tahunan")) if model is not None else None,
+            "margin_profit": _json_scalar(model.get("margin_profit")) if model is not None else None,
+            "tenaga_kerja": _json_scalar(model.get("tenaga_kerja")) if model is not None else None,
+            "barang_tetap": _json_scalar(model.get("barang_tetap")) if model is not None else None,
+            "rasio_barang_tetap": _json_scalar(model.get("rasio_barang_tetap")) if model is not None else None,
+            "rasio_bahan_baku": _json_scalar(model.get("rasio_bahan_baku")) if model is not None else None,
+            "rasio_utilitas": _json_scalar(model.get("rasio_utilitas")) if model is not None else None,
+            "rasio_penggajian": _json_scalar(model.get("rasio_penggajian")) if model is not None else None,
+            "tekanan_biaya_terpilih": _json_scalar(model.get("tekanan_biaya_terpilih")) if model is not None else None,
+        })
+    return records
+
+
+def _persist_analysis_results(conn, period_id: int, prepared: dict, response_rows, now: str) -> None:
+    records = _analysis_records(prepared, response_rows)
+    conn.execute("DELETE FROM survey_analysis_results WHERE period_id = %s", (period_id,))
+    with conn.cursor() as cursor:
+        cursor.executemany(
+            """INSERT INTO survey_analysis_results
+               (period_id, response_id, row_number, nama_usaha, subsektor,
+                klasifikasi_umkm, kecamatan, kelurahan, cluster_id, cluster_label,
+                status, pc1, pc2, penjualan_tahunan, margin_profit, tenaga_kerja,
+                barang_tetap, rasio_barang_tetap, rasio_bahan_baku, rasio_utilitas, rasio_penggajian,
+                tekanan_biaya_terpilih, analysis_version, created_at)
+               VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
+                       %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""",
+            [
+                (
+                    period_id,
+                    record["response_id"],
+                    record["row_number"],
+                    record["nama_usaha"],
+                    record["subsektor"],
+                    record["klasifikasi_umkm"],
+                    record["kecamatan"],
+                    record["kelurahan"],
+                    record["cluster_id"],
+                    record["cluster_label"],
+                    record["status"],
+                    record["pc1"],
+                    record["pc2"],
+                    record["penjualan_tahunan"],
+                    record["margin_profit"],
+                    record["tenaga_kerja"],
+                    record["barang_tetap"],
+                    record["rasio_barang_tetap"],
+                    record["rasio_bahan_baku"],
+                    record["rasio_utilitas"],
+                    record["rasio_penggajian"],
+                    record["tekanan_biaya_terpilih"],
+                    ANALYSIS_VERSION,
+                    now,
+                )
+                for record in records
+            ],
+        )
+
+    conn.execute(
+        """UPDATE survey_periods
+           SET analysis_status = 'ready', analysis_version = %s,
+               analysis_meta_json = %s, analysis_completed_at = %s,
+               analysis_error = NULL, updated_at = %s
+           WHERE id = %s""",
+        (
+            ANALYSIS_VERSION,
+            json.dumps(_analysis_meta(prepared), ensure_ascii=False),
+            now,
+            now,
+            period_id,
+        ),
+    )
+
+
+def get_survey_period(survey_year: int) -> dict:
+    period = next(
+        (item for item in load_survey_periods() if item["survey_year"] == int(survey_year)),
+        None,
+    )
+    if period is None:
+        raise LookupError(f"Periode survei tahun {survey_year} tidak ditemukan.")
+    return period
+
+
+def ensure_survey_analysis(period_id: int) -> dict:
+    """Backfill one legacy period once, then return its metadata."""
+    period = next(
+        (item for item in load_survey_periods() if item["id"] == int(period_id)),
+        None,
+    )
+    if period is None:
+        raise LookupError("Periode survei tidak ditemukan.")
+    if (
+        period["analysis_status"] == "ready"
+        and period.get("analysis_version") == ANALYSIS_VERSION
+    ):
+        return period
+    if period["analysis_status"] == "failed":
+        detail = period.get("analysis_error") or "alasan tidak tersedia"
+        raise LookupError(f"Analisis periode {period['survey_year']} gagal: {detail}")
+
+    try:
+        from utils.database import transaction, utcnow
+
+        with transaction() as conn:
+            current = conn.execute(
+                """SELECT id, survey_year, analysis_status, analysis_version, analysis_error FROM survey_periods
+                   WHERE id = %s FOR UPDATE""",
+                (period_id,),
+            ).fetchone()
+            if current is None:
+                raise LookupError("Periode survei tidak ditemukan.")
+            if (
+                current["analysis_status"] == "ready"
+                and current["analysis_version"] == ANALYSIS_VERSION
+            ):
+                pass
+            elif current["analysis_status"] == "failed":
+                raise LookupError(
+                    f"Analisis periode {current['survey_year']} gagal: "
+                    f"{current['analysis_error'] or 'alasan tidak tersedia'}"
+                )
+            else:
+                # Keep the row lock while building the legacy result so a
+                # parallel summary/actors request cannot run the model twice.
+                prepared = load_survey_data(period_id)
+                response_rows = conn.execute(
+                    """SELECT id, row_number FROM survey_responses
+                       WHERE period_id = %s ORDER BY row_number""",
+                    (period_id,),
+                ).fetchall()
+                _persist_analysis_results(conn, period_id, prepared, response_rows, utcnow())
+        return get_survey_period(period["survey_year"])
+    except Exception as error:
+        from utils.database import transaction, utcnow
+
+        with transaction() as conn:
+            conn.execute(
+                """UPDATE survey_periods
+                   SET analysis_status = 'failed', analysis_error = %s, updated_at = %s
+                   WHERE id = %s AND analysis_status <> 'ready'""",
+                (str(error)[:1000], utcnow(), period_id),
+            )
+        raise
+
+
+def load_analysis_dataframe(period_id: int, cluster: str = "") -> pd.DataFrame:
+    from utils.database import connection
+
+    query = """SELECT response_id, row_number, nama_usaha, subsektor,
+                      klasifikasi_umkm, kecamatan, kelurahan, cluster_id,
+                      cluster_label, status, pc1, pc2, penjualan_tahunan,
+                      margin_profit, tenaga_kerja, barang_tetap, rasio_barang_tetap,
+                      rasio_bahan_baku, rasio_utilitas, rasio_penggajian,
+                      tekanan_biaya_terpilih
+               FROM survey_analysis_results
+               WHERE period_id = %s"""
+    params: list = [period_id]
+    if cluster:
+        query += " AND cluster_label = %s"
+        params.append(cluster)
+    query += " ORDER BY row_number"
+
+    with connection() as conn:
+        rows = conn.execute(query, params).fetchall()
+    if not rows:
+        return pd.DataFrame(columns=[
+            "survey_response_id", "survey_row_number", "nama_usaha", "subsektor_ringkas",
+            "klasifikasi_umkm", "kecamatan", "kelurahan", "cluster_id", "cluster",
+            "status", "pc1", "pc2", "penjualan_tahunan", "margin_profit", "tenaga_kerja",
+            "barang_tetap", "rasio_barang_tetap", "rasio_bahan_baku", "rasio_utilitas", "rasio_penggajian",
+            "tekanan_biaya_terpilih",
+        ])
+
+    frame = pd.DataFrame([dict(row) for row in rows])
+    return frame.rename(columns={
+        "response_id": "survey_response_id",
+        "row_number": "survey_row_number",
+        "subsektor": "subsektor_ringkas",
+        "cluster_label": "cluster",
+    })
+
+
+def load_analysis_page(
+    period_id: int,
+    *,
+    cluster: str = "",
+    page: int = 1,
+    per_page: int = 50,
+) -> dict:
+    from utils.database import connection
+
+    page = max(1, int(page))
+    per_page = min(50, max(1, int(per_page)))
+    where = "WHERE period_id = %s"
+    params: list = [period_id]
+    if cluster:
+        where += " AND cluster_label = %s"
+        params.append(cluster)
+
+    with connection() as conn:
+        total = conn.execute(
+            f"SELECT COUNT(*) AS total FROM survey_analysis_results {where}", params
+        ).fetchone()["total"]
+        total = int(total)
+        pages = (total + per_page - 1) // per_page if total else 0
+        page = min(page, pages) if pages else 1
+        rows = conn.execute(
+            f"""SELECT response_id, row_number, nama_usaha, subsektor,
+                       klasifikasi_umkm, kecamatan, kelurahan,
+                       cluster_id, cluster_label, status, penjualan_tahunan,
+                       margin_profit, tenaga_kerja
+                FROM survey_analysis_results {where}
+                ORDER BY row_number LIMIT %s OFFSET %s""",
+            [*params, per_page, (page - 1) * per_page],
+        ).fetchall()
+
+    items = []
+    for row in rows:
+        item = dict(row)
+        item["cluster"] = item.pop("cluster_label")
+        item["response_id"] = int(item["response_id"])
+        items.append(item)
+    return {
+        "items": items,
+        "page": page,
+        "per_page": per_page,
+        "total": total,
+        "pages": pages,
+    }
 
 
 def import_survey_period(
@@ -510,6 +804,20 @@ def import_survey_period(
                     for index, record in enumerate(records, start=2)
                 ],
             )
+        response_rows = conn.execute(
+            """SELECT id, row_number FROM survey_responses
+               WHERE period_id = %s ORDER BY row_number""",
+            (period_id,),
+        ).fetchall()
+        _persist_analysis_results(conn, period_id, prepared, response_rows, now)
+        period = conn.execute(
+            """SELECT id, survey_year, label, source_filename, source_sheet,
+                      file_sha256, status, total_rows, valid_rows, created_at,
+                      analysis_status, analysis_version, analysis_meta_json,
+                      analysis_completed_at, analysis_error
+               FROM survey_periods WHERE id = %s""",
+            (period_id,),
+        ).fetchone()
 
     invalidate_survey_cache(period_id)
     return _period_payload(period)

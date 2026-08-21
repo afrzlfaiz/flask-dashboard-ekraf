@@ -119,7 +119,9 @@ cp .env.example .env
 
 Aplikasi membuat atau memperbarui tabel PostgreSQL secara otomatis saat startup. Data dikelola langsung melalui Supabase dan fitur impor XLSX di halaman Kelola Data.
 
-Halaman `/survei` menyimpan jawaban ke database per periode tahun. Periode awal 2026 dapat di-seed dari sheet `Sheet6` pada file `SURVEY_DATA_PATH` (default lokal: `../laporan/Data PKL Fix.xlsx`) menggunakan script import. Tahun berikutnya ditambahkan admin langsung dari halaman `/survei`; halaman survei selalu menganalisis satu periode terpilih sehingga hasil antar-tahun tidak digabung.
+Modul survei hanya dapat dibuka admin. Halaman `/survei` menampilkan daftar metadata periode, `/survei/periode-YYYY` menampilkan analisis satu tahun beserta hasil cluster per pelaku, dan `/survei/kelola` digunakan untuk menambah tahun berikutnya. Jawaban mentah tersimpan di `survey_responses`, sedangkan hasil RobustScaler + DBSCAN + PCA disiapkan satu kali saat import/backfill dan disimpan per pelaku di `survey_analysis_results`; hasil antar-tahun tidak digabung.
+
+Periode awal 2026 dapat di-seed dari sheet `Sheet6` pada file `SURVEY_DATA_PATH` (default lokal: `../laporan/Data PKL Fix.xlsx`) menggunakan script import. Periode lama yang belum memiliki hasil analisis akan diproses satu kali saat pertama kali dibuka, lalu halaman hanya membaca hasil tersimpan dengan pagination maksimal 50 baris.
 
 Untuk seed awal secara manual:
 ```bash

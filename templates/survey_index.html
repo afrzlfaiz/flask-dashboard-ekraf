@@ -1,0 +1,51 @@
+{% extends "survey.html" %}
+
+{% block page_title %}Periode Survei{% endblock %}
+{% block page_heading %}Periode Survei{% endblock %}
+{% block page_description %}Pilih satu tahun untuk melihat analisis pelaku ekonomi kreatif.{% endblock %}
+
+{% block survey_content %}
+<section class="survey-intro-card mb-4">
+    <div>
+        <span class="section-icon section-icon-warm"><i class="bi bi-calendar2-range-fill"></i></span>
+        <div>
+            <h2>Analisis per tahun</h2>
+            <p>Data responden dan hasil clustering tidak digabung antarperiode. Buka salah satu periode untuk melihat anggota cluster per pelaku.</p>
+        </div>
+    </div>
+    <a class="btn btn-primary rounded-3" href="{{ url_for('survey_manage_page') }}">
+        <i class="bi bi-database-gear me-1"></i>Kelola Data
+    </a>
+</section>
+
+<section class="survey-period-grid" aria-label="Daftar periode survei">
+    {% for period in periods %}
+    <a class="survey-period-card" href="{{ url_for('survey_period_page', survey_year=period.survey_year) }}">
+        <div class="d-flex justify-content-between align-items-start gap-3">
+            <span class="survey-period-year">{{ period.survey_year }}</span>
+            {% if period.analysis_status == 'ready' %}
+                <span class="badge rounded-pill bg-success-subtle text-success-emphasis">Siap dianalisis</span>
+            {% elif period.analysis_status == 'failed' %}
+                <span class="badge rounded-pill bg-danger-subtle text-danger-emphasis">Analisis gagal</span>
+            {% else %}
+                <span class="badge rounded-pill bg-warning-subtle text-warning-emphasis">Menunggu analisis</span>
+            {% endif %}
+        </div>
+        <h2>{{ period.label }}</h2>
+        <p class="text-muted mb-4">{{ period.source_filename }}</p>
+        <div class="survey-period-meta">
+            <span><i class="bi bi-people me-1"></i>{{ "{:,}".format(period.rows).replace(",", ".") }} baris</span>
+            <span><i class="bi bi-check2-circle me-1"></i>{{ "{:,}".format(period.valid_rows).replace(",", ".") }} lengkap</span>
+        </div>
+        <span class="survey-period-open">Buka analisis <i class="bi bi-arrow-right"></i></span>
+    </a>
+    {% else %}
+    <div class="empty-state-card">
+        <i class="bi bi-calendar-x fs-2 text-muted"></i>
+        <h2>Belum ada periode survei</h2>
+        <p>Tambahkan survei tahunan pertama melalui halaman Kelola Data.</p>
+        <a class="btn btn-primary rounded-3" href="{{ url_for('survey_manage_page') }}">Tambah Survei</a>
+    </div>
+    {% endfor %}
+</section>
+{% endblock %}

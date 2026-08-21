@@ -4,46 +4,63 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="csrf-token" content="{{ csrf_token() }}">
-    <title>Survei Tahunan Ekraf — Dashboard Ekonomi Kreatif</title>
+    <title>{% block page_title %}Survei Tahunan Ekraf{% endblock %} — Dashboard Ekonomi Kreatif</title>
     <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='img/logo.svg') }}">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.2/font/bootstrap-icons.css" rel="stylesheet">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
 </head>
 <body class="dashboard-body survey-standalone">
-    <main class="main-content survey-page-shell" id="main-content">
-        <header class="top-header">
-            <div class="header-identity">
-                <a class="btn btn-outline-primary rounded-3" href="/" aria-label="Kembali ke dashboard utama">
-                    <i class="bi bi-arrow-left" aria-hidden="true"></i>
-                    <span class="d-none d-sm-inline">Dashboard Utama</span>
+    <div class="survey-app-shell">
+        <aside class="survey-sidebar" aria-label="Navigasi survei tahunan">
+            <div class="survey-sidebar-brand">
+                <img src="{{ url_for('static', filename='img/logo.svg') }}" alt="Logo BAPPEDA">
+                <div><strong>Survei Ekraf</strong><span>Panel administrator</span></div>
+            </div>
+            <nav class="survey-sidebar-nav">
+                <a href="{{ url_for('survey_page') }}" class="survey-sidebar-link{% if survey_section|default('periods') == 'periods' %} active{% endif %}">
+                    <i class="bi bi-calendar3" aria-hidden="true"></i><span>Periode Survei</span>
                 </a>
-                <div class="header-copy">
-                    <h1>Survei Tahunan Ekraf</h1>
-                    <p>Analisis karakteristik usaha berdasarkan periode survei</p>
-                </div>
+                <a href="{{ url_for('survey_manage_page') }}" class="survey-sidebar-link{% if survey_section|default('') == 'manage' %} active{% endif %}">
+                    <i class="bi bi-database-gear" aria-hidden="true"></i><span>Kelola Data</span>
+                </a>
+            </nav>
+            <div class="survey-sidebar-bottom">
+                <a href="{{ url_for('dashboard') }}" class="survey-sidebar-link">
+                    <i class="bi bi-arrow-left" aria-hidden="true"></i><span>Dashboard Utama</span>
+                </a>
+                <p>Setiap tahun tersimpan dan dianalisis sebagai periode terpisah.</p>
             </div>
-            <div class="header-actions">
-                <div class="text-end d-none d-md-block">
-                    <span class="time-badge" id="live-time-badge">
-                        <i class="bi bi-calendar3 me-1 text-primary"></i> Loading...
-                    </span>
+        </aside>
+
+        <main class="survey-main-content" id="main-content">
+            <header class="survey-top-header">
+                <div>
+                    <div class="eyebrow-label">BAPPEDA KOTA MALANG</div>
+                    <h1>{% block page_heading %}Survei Tahunan Ekraf{% endblock %}</h1>
+                    <p>{% block page_description %}Kelola dan baca hasil survei berdasarkan periode.{% endblock %}</p>
                 </div>
-                <button class="btn btn-primary header-refresh" id="btn-refresh-data" type="button">
-                    <i class="bi bi-arrow-clockwise" aria-hidden="true"></i>
-                    <span>Refresh Data</span>
-                </button>
-            </div>
-        </header>
+                <div class="survey-header-date d-none d-md-flex" id="survey-header-date">
+                    <i class="bi bi-calendar3 me-2 text-primary" aria-hidden="true"></i><span></span>
+                </div>
+            </header>
 
-        {% include "_survey_panel.html" %}
+            {% block survey_content %}{% endblock %}
 
-        <footer class="app-footer">
-            <span>© 2026 BAPPEDA Kota Malang</span>
-            <span>Survei Tahunan Ekraf</span>
-        </footer>
-    </main>
-
-    <script src="{{ url_for('static', filename='js/survey.js') }}"></script>
+            <footer class="app-footer">
+                <span>© 2026 BAPPEDA Kota Malang</span>
+                <span>Survei Tahunan Ekraf</span>
+            </footer>
+        </main>
+    </div>
+    <script>
+        (() => {
+            const target = document.querySelector("#survey-header-date span");
+            if (target) target.textContent = new Date().toLocaleDateString("id-ID", {
+                day: "numeric", month: "long", year: "numeric"
+            });
+        })();
+    </script>
+    {% block page_scripts %}{% endblock %}
 </body>
 </html>
