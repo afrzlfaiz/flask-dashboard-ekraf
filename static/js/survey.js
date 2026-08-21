@@ -11,7 +11,25 @@ const SurveyPage = (() => {
     const rupiah = value => new Intl.NumberFormat("id-ID", {
         style: "currency", currency: "IDR", maximumFractionDigits: 0,
     }).format(Number(value || 0));
-    const escape = value => App.escapeHTML(value);
+    const escape = value => String(value ?? "").replace(/[&<>'"]/g, char => ({
+        "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;",
+    })[char]);
+
+    function loadPlotly() {
+        const source = "https://cdn.plot.ly/plotly-basic-2.27.0.min.js";
+        if (typeof App !== "undefined" && typeof App.loadScript === "function") {
+            return App.loadScript(source);
+        }
+        const existing = document.querySelector(`script[src="${source}"]`);
+        if (existing) return Promise.resolve();
+        return new Promise((resolve, reject) => {
+            const script = document.createElement("script");
+            script.src = source;
+            script.onload = resolve;
+            script.onerror = reject;
+            document.head.appendChild(script);
+        });
+    }
 
     function setOptions(selectId, values, placeholder) {
         const select = document.getElementById(selectId);
@@ -100,8 +118,8 @@ const SurveyPage = (() => {
                 .forEach(id => { document.getElementById(id).innerHTML = '<p class="text-muted text-center py-5">Tidak ada data sesuai filter.</p>'; });
             return;
         }
-        await App.loadScript("https://cdn.plot.ly/plotly-basic-2.27.0.min.js");
-        if (App.currentPage !== "survey-page") return;
+        await loadPlotly();
+        if (typeof App !== "undefined" && App.currentPage !== "survey-page") return;
         const config = { responsive: true, displayModeBar: false };
         const baseLayout = {
             autosize: true, margin: { l: 12, r: 24, t: 12, b: 42 },
@@ -209,6 +227,7 @@ const SurveyPage = (() => {
     function init() {
         document.getElementById("btn-survey-apply")?.addEventListener("click", refresh);
         document.getElementById("btn-survey-reset")?.addEventListener("click", reset);
+        document.getElementById("btn-refresh-data")?.addEventListener("click", refresh);
         document.getElementById("survey-filter-period")?.addEventListener("change", () => {
             ["survey-filter-kecamatan", "survey-filter-subsektor", "survey-filter-umkm"].forEach(id => {
                 const select = document.getElementById(id);
@@ -218,11 +237,44 @@ const SurveyPage = (() => {
             optionsPeriodId = null;
             refresh();
         });
+        if (document.body.classList.contains("survey-standalone")) {
+            setupStandaloneShell();
+            refresh();
+        }
     }
 
     function invalidateOptions() {
         optionsLoaded = false;
         optionsPeriodId = null;
+    }
+
+    function setupStandaloneShell() {
+        const clock = document.getElementById("live-time-badge");
+        if (clock) {
+            const updateClock = () => {
+                const now = new Date();
+                clock.innerHTML = `<i class="bi bi-clock me-1 text-primary"></i> ${now.toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" })}, ${now.toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" })}`;
+            };
+            updateClock();
+            window.setInterval(updateClock, 30000);
+        }
+
+        const sidebar = document.getElementById("sidebar");
+        const backdrop = document.getElementById("sidebar-backdrop");
+        const toggle = document.getElementById("sidebar-toggle");
+        const setSidebar = open => {
+            const visible = Boolean(open) && window.innerWidth < 992;
+            sidebar?.classList.toggle("show", visible);
+            backdrop?.classList.toggle("show", visible);
+            document.body.classList.toggle("sidebar-open", visible);
+            toggle?.setAttribute("aria-expanded", String(visible));
+        };
+        toggle?.addEventListener("click", () => setSidebar(!sidebar?.classList.contains("show")));
+        document.getElementById("sidebar-close")?.addEventListener("click", () => setSidebar(false));
+        backdrop?.addEventListener("click", () => setSidebar(false));
+        document.addEventListener("keydown", event => {
+            if (event.key === "Escape") setSidebar(false);
+        });
     }
 
     return { init, refresh, invalidateOptions };

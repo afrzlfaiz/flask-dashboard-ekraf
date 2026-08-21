@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+
+{% block title %}Survei Tahunan Ekraf — Dashboard Ekonomi Kreatif{% endblock %}
+
+{% block content %}
+{% include "_survey_panel.html" %}
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/survey.js') }}"></script>
+{% endblock %}

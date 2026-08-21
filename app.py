@@ -109,6 +109,10 @@ def create_app(test_config=None):
     def dashboard():
         return render_template("dashboard.html")
 
+    @app.route("/survei")
+    def survey_page():
+        return render_template("survey.html", standalone_survey=True)
+
     @app.route("/healthz")
     def healthz():
         return jsonify({"status": "ok"})
@@ -126,7 +130,7 @@ def create_app(test_config=None):
             return error_response(403, "Anda tidak memiliki izin membuka halaman kelola data.")
         return render_template("dashboard.html", page=page)
 
-    for page in ["peta", "clustering", "statistik", "survei", "tabel", "kelola", "tentang"]:
+    for page in ["peta", "clustering", "statistik", "tabel", "kelola", "tentang"]:
         app.add_url_rule(f"/{page}", f"page_{page}", dashboard_page, defaults={"page": page})
 
     def error_response(status, message, *, code=None):

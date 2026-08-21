@@ -1,3 +1,4 @@
+{% set is_standalone_survey = standalone_survey|default(false) %}
 <!DOCTYPE html>
 <html lang="id">
 <head>
@@ -21,7 +22,7 @@
     <!-- Custom CSS -->
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
 </head>
-<body class="dashboard-body">
+<body class="dashboard-body{% if is_standalone_survey %} survey-standalone{% endif %}">
 
     <a class="skip-link" href="#main-content">Lewati ke konten utama</a>
 
@@ -42,22 +43,22 @@
 
         <div class="sidebar-menu">
             <div id="auth-area" class="px-3 mb-3"></div>
-            <a href="#" class="menu-item active" data-target="overview-page" aria-current="page">
+            <a href="/" class="menu-item{% if not is_standalone_survey %} active{% endif %}" data-target="overview-page"{% if not is_standalone_survey %} aria-current="page"{% endif %}>
                 <i class="bi bi-grid-fill"></i> Overview
             </a>
-            <a href="#" class="menu-item" data-target="dbscan-page">
+            <a href="/clustering" class="menu-item" data-target="dbscan-page">
                 <i class="bi bi-geo-fill"></i> Clustering DBSCAN
             </a>
-            <a href="/survei" class="menu-item" data-target="survey-page">
+            <a href="/survei" class="menu-item{% if is_standalone_survey %} active{% endif %}" data-target="survey-page"{% if is_standalone_survey %} aria-current="page"{% endif %}>
                 <i class="bi bi-bar-chart-line-fill"></i> Survei Tahunan Ekraf
             </a>
-            <a href="#" class="menu-item" data-target="table-page">
+            <a href="/tabel" class="menu-item" data-target="table-page">
                 <i class="bi bi-table"></i> Tabel Data
             </a>
-            <a href="#" class="menu-item auth-operator-only" data-target="manage-page" style="display:none;">
+            <a href="/kelola" class="menu-item auth-operator-only" data-target="manage-page" style="display:none;">
                 <i class="bi bi-sliders"></i> Kelola Data
             </a>
-            <a href="#" class="menu-item" data-target="tentang-page">
+            <a href="/tentang" class="menu-item" data-target="tentang-page">
                 <i class="bi bi-info-circle-fill"></i> Tentang & Panduan
             </a>
         </div>
@@ -103,8 +104,13 @@
                     <i class="bi bi-list" aria-hidden="true"></i>
                 </button>
                 <div class="header-copy">
+                    {% if is_standalone_survey %}
+                    <h1>Survei Tahunan Ekraf</h1>
+                    <p>Analisis karakteristik usaha berdasarkan periode survei yang dipilih</p>
+                    {% else %}
                     <h1>Dashboard Ekonomi Kreatif</h1>
                     <p>Pemetaan dan analisis spasial pelaku ekraf Kota Malang</p>
+                    {% endif %}
                 </div>
             </div>
             <div class="header-actions">
@@ -120,6 +126,7 @@
             </div>
         </div>
 
+        {% if not is_standalone_survey %}
         <!-- Global Filter -->
         <section class="custom-card filter-card mb-4" id="filter-card" aria-labelledby="filter-title">
             <div class="filter-card-header">
@@ -185,6 +192,7 @@
                 </div>
             </div>
         </section>
+        {% endif %}
 
         {% block content %}{% endblock %}
 
@@ -216,8 +224,10 @@
     <script src="https://cdn.jsdelivr.net/npm/tom-select@2.3.1/dist/js/tom-select.complete.min.js"></script>
     <!-- Auth JS -->
     <script src="{{ url_for('static', filename='js/auth.js') }}"></script>
+    {% if not is_standalone_survey %}
     <!-- App JS -->
     <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+    {% endif %}
     {% block scripts %}{% endblock %}
 </body>
 </html>

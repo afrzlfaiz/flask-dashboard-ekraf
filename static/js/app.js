@@ -118,8 +118,6 @@ const App = {
         if (window.Plotly) {
             [
                 "kecamatan-donut-chart", "subsektor-bar-chart",
-                "survey-cluster-chart", "survey-subsector-chart",
-                "survey-kecamatan-chart", "survey-pca-chart",
             ].forEach(id => {
                 const chart = document.getElementById(id);
                 if (chart && chart.offsetParent !== null && chart.data) Plotly.Plots.resize(chart);
@@ -143,8 +141,6 @@ const App = {
 
         const target = document.getElementById(targetId);
         if (target) target.classList.remove("d-none");
-        document.getElementById("filter-card")?.classList.toggle("d-none", targetId === "survey-page");
-
         const link = document.querySelector(`.menu-item[data-target="${targetId}"]`);
         if (link) {
             link.classList.add("active");
@@ -157,7 +153,6 @@ const App = {
             const pathMap = {
                 "overview-page": "/",
                 "dbscan-page": "/clustering",
-                "survey-page": "/survei",
                 "table-page": "/tabel",
                 "manage-page": "/kelola",
                 "tentang-page": "/tentang"
@@ -188,10 +183,6 @@ const App = {
                     dataTableInstance?.columns.adjust();
                     dataTableInstance?.responsive?.recalc();
                 }).catch(err => App.showToast("Error", err.message));
-            }
-
-            if (targetId === "survey-page" && typeof refreshSurvey === "function") {
-                refreshSurvey().catch(err => App.showToast("Error", err.message));
             }
 
             if (refreshData && targetId === "manage-page" && typeof refreshKelolaList === "function") {
@@ -389,6 +380,7 @@ document.addEventListener("DOMContentLoaded", () => {
     // Sidebar
     document.querySelectorAll(".menu-item").forEach(link => {
         link.addEventListener("click", function (e) {
+            if (this.dataset.target === "survey-page") return;
             e.preventDefault();
             App.switchPage(this.getAttribute("data-target"));
         });
@@ -408,11 +400,7 @@ document.addEventListener("DOMContentLoaded", () => {
     document.getElementById("btn-filter-malang").addEventListener("click", () => App.applyMalangFilter());
     document.getElementById("btn-reset-filter").addEventListener("click", () => App.resetFilters());
     document.getElementById("btn-refresh-data").addEventListener("click", () => {
-        if (App.currentPage === "survey-page" && typeof refreshSurvey === "function") {
-            refreshSurvey();
-        } else {
-            App.applyFilters();
-        }
+        App.applyFilters();
     });
     const filterSearch = document.getElementById("filter-search");
     filterSearch.addEventListener("focus", () => filterSearch.removeAttribute("readonly"), { once: true });
@@ -471,7 +459,6 @@ document.addEventListener("DOMContentLoaded", () => {
         const path = window.location.pathname;
         const pathMap = {
             "/clustering": "dbscan-page",
-            "/survei": "survey-page",
             "/tabel": "table-page",
             "/kelola": "manage-page",
             "/tentang": "tentang-page"
@@ -486,7 +473,6 @@ document.addEventListener("DOMContentLoaded", () => {
         const initialPath = window.location.pathname;
         const pathMap = {
             "/clustering": "dbscan-page",
-            "/survei": "survey-page",
             "/tabel": "table-page",
             "/kelola": "manage-page",
             "/tentang": "tentang-page"
