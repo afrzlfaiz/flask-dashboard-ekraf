@@ -227,6 +227,75 @@
     </div>
 </div>
 
+<!-- =================== PAGE 3: SURVEI TAHUNAN EKRAF =================== -->
+<div id="survey-page" class="page-view d-none">
+    <div class="card custom-card section-card-body mb-4">
+        <div class="section-toolbar">
+            <div class="section-heading">
+                <span class="section-icon section-icon-warm" aria-hidden="true"><i class="bi bi-clipboard2-data-fill"></i></span>
+                <div>
+                    <h2>Survei Tahunan Ekraf</h2>
+                    <p>Pilih satu periode survei. Setiap tahun dianalisis sendiri dan tidak digabung dengan tahun lain.</p>
+                </div>
+            </div>
+            <span class="badge bg-light text-primary border" id="survey-source-badge">Memuat sumber...</span>
+        </div>
+        <div class="survey-filter-grid mt-4">
+            <div>
+                <label class="form-label" for="survey-filter-period">Periode Survei</label>
+                <select class="form-select rounded-3" id="survey-filter-period"><option value="">Memuat periode...</option></select>
+            </div>
+            <div>
+                <label class="form-label" for="survey-filter-kecamatan">Kecamatan</label>
+                <select class="form-select rounded-3" id="survey-filter-kecamatan"><option value="">Semua Kecamatan</option></select>
+            </div>
+            <div>
+                <label class="form-label" for="survey-filter-subsektor">Subsektor</label>
+                <select class="form-select rounded-3" id="survey-filter-subsektor"><option value="">Semua Subsektor</option></select>
+            </div>
+            <div>
+                <label class="form-label" for="survey-filter-umkm">Klasifikasi UMKM</label>
+                <select class="form-select rounded-3" id="survey-filter-umkm"><option value="">Semua Klasifikasi</option></select>
+            </div>
+            <div class="d-flex align-items-end gap-2">
+                <button class="btn btn-outline-secondary flex-fill rounded-3" id="btn-survey-reset" type="button"><i class="bi bi-arrow-counterclockwise me-1"></i>Reset</button>
+                <button class="btn btn-primary flex-fill rounded-3" id="btn-survey-apply" type="button"><i class="bi bi-check2 me-1"></i>Terapkan</button>
+            </div>
+        </div>
+        <div class="small text-muted mt-3" id="survey-model-info"></div>
+    </div>
+
+    <div class="alert alert-warning d-none" id="survey-error" role="alert"></div>
+
+    <div class="kpi-grid mb-4">
+        <div><div class="kpi-card"><div class="kpi-icon-wrapper kpi-icon-blue"><i class="bi bi-building fs-4"></i></div><div><div class="kpi-value" id="survey-total-observasi">0</div><div class="kpi-label">Usaha Disurvei</div><div class="kpi-subtext">Observasi lengkap untuk model</div></div></div></div>
+        <div><div class="kpi-card"><div class="kpi-icon-wrapper kpi-icon-green"><i class="bi bi-cash-stack fs-4"></i></div><div><div class="kpi-value" id="survey-total-penjualan">Rp0</div><div class="kpi-label">Total Penjualan</div><div class="kpi-subtext">Akumulasi tahunan</div></div></div></div>
+        <div><div class="kpi-card"><div class="kpi-icon-wrapper kpi-icon-yellow"><i class="bi bi-percent fs-4"></i></div><div><div class="kpi-value" id="survey-median-margin">0%</div><div class="kpi-label">Median Margin</div><div class="kpi-subtext">Profit terhadap penjualan</div></div></div></div>
+        <div><div class="kpi-card"><div class="kpi-icon-wrapper kpi-icon-purple"><i class="bi bi-people-fill fs-4"></i></div><div><div class="kpi-value" id="survey-total-tenaga-kerja">0</div><div class="kpi-label">Tenaga Kerja</div><div class="kpi-subtext">Total yang dilaporkan</div></div></div></div>
+        <div><div class="kpi-card"><div class="kpi-icon-wrapper kpi-icon-teal"><i class="bi bi-diagram-3-fill fs-4"></i></div><div><div class="kpi-value" id="survey-clustered-rate">0%</div><div class="kpi-label">Terpetakan Cluster</div><div class="kpi-subtext">Di luar noise DBSCAN</div></div></div></div>
+    </div>
+
+    <div class="row">
+        <div class="col-12 col-lg-5 mb-4"><div class="card custom-card section-card-body h-100"><div class="section-heading compact mb-2"><span class="section-icon"><i class="bi bi-pie-chart-fill"></i></span><div><h2>Distribusi Cluster</h2><p>Hasil model final notebook</p></div></div><div id="survey-cluster-chart" class="survey-chart"></div></div></div>
+        <div class="col-12 col-lg-7 mb-4"><div class="card custom-card section-card-body h-100"><div class="section-heading compact mb-2"><span class="section-icon"><i class="bi bi-bar-chart-line-fill"></i></span><div><h2>Subsektor Survei</h2><p>Jumlah usaha menurut subsektor</p></div></div><div id="survey-subsector-chart" class="survey-chart"></div></div></div>
+    </div>
+
+    <div class="row">
+        <div class="col-12 col-lg-6 mb-4"><div class="card custom-card section-card-body h-100"><div class="section-heading compact mb-2"><span class="section-icon"><i class="bi bi-geo-alt-fill"></i></span><div><h2>Distribusi Kecamatan</h2><p>Persebaran observasi survei</p></div></div><div id="survey-kecamatan-chart" class="survey-chart"></div></div></div>
+        <div class="col-12 col-lg-6 mb-4"><div class="card custom-card section-card-body h-100"><div class="section-heading compact mb-2"><span class="section-icon section-icon-warm"><i class="bi bi-bullseye"></i></span><div><h2>Peta PCA Cluster</h2><p>PCA hanya untuk visualisasi, bukan input model</p></div></div><div id="survey-pca-chart" class="survey-chart"></div></div></div>
+    </div>
+
+    <div class="card custom-card section-card-body mb-4">
+        <div class="section-heading compact mb-3"><span class="section-icon"><i class="bi bi-bar-chart-steps"></i></span><div><h2>Profil dan Arah Kebijakan Cluster</h2><p>Nilai median indikator ekonomi pada hasil filter aktif</p></div></div>
+        <div class="row g-3" id="survey-cluster-profiles"></div>
+    </div>
+
+    <div class="card custom-card section-card-body">
+        <div class="section-heading compact mb-3"><span class="section-icon"><i class="bi bi-table"></i></span><div><h2>Ringkasan Indikator per Kecamatan</h2><p>Agregat untuk menjaga kerahasiaan data individual survei</p></div></div>
+        <div class="table-responsive"><table class="table table-hover align-middle"><thead class="table-light"><tr><th>Kecamatan</th><th>Usaha</th><th>Total Penjualan</th><th>Median Margin</th><th>Tenaga Kerja</th></tr></thead><tbody id="survey-kecamatan-table-body"></tbody></table></div>
+    </div>
+</div>
+
 <!-- =================== PAGE 3: DATA TABLE =================== -->
 <div id="table-page" class="page-view d-none">
     <div class="card custom-card section-card-body">
@@ -327,6 +396,35 @@
         </div>
 
         <div class="col-12 col-lg-7 mb-4">
+            <!-- Annual survey periods -->
+            <div class="card custom-card section-card-body mb-4">
+                <h5 class="fw-bold text-primary mb-2"><i class="bi bi-calendar2-range-fill me-2"></i>Kelola Survei Tahunan Ekraf</h5>
+                <p class="text-muted small mb-3">Tambahkan survei tahun berikutnya. Setiap tahun disimpan sebagai periode terpisah dan hasil analisisnya tidak digabung.</p>
+                <div class="row g-2 align-items-end">
+                    <div class="col-12 col-sm-3">
+                        <label class="form-label small fw-bold text-muted" for="survey-year-input">TAHUN SURVEI</label>
+                        <input type="number" class="form-control form-control-sm rounded-3" id="survey-year-input" min="2026" max="2100" placeholder="2027">
+                    </div>
+                    <div class="col-12 col-sm-5">
+                        <label class="form-label small fw-bold text-muted" for="survey-year-file">FILE XLSX SURVEI</label>
+                        <input type="file" class="form-control form-control-sm rounded-3" id="survey-year-file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet">
+                    </div>
+                    <div class="col-12 col-sm-4">
+                        <button class="btn btn-primary btn-sm w-100 rounded-3" type="button" id="btn-import-survey-year" style="min-height: 2.55rem;">
+                            <i class="bi bi-database-up me-1"></i>Simpan Periode
+                        </button>
+                    </div>
+                </div>
+                <small class="text-muted d-block mt-2">Sheet yang digunakan: <strong id="survey-year-sheet-name">Sheet6</strong>. Tahun 2026 adalah periode awal.</small>
+                <div id="survey-period-alert" class="alert d-none mt-3 mb-3 py-2 small" role="alert"></div>
+                <div class="table-responsive manage-table-scroll">
+                    <table class="table table-sm align-middle mb-0">
+                        <thead class="table-light"><tr><th>Tahun</th><th>Periode</th><th class="text-end">Baris</th><th>Status</th></tr></thead>
+                        <tbody id="survey-period-list-body"><tr><td colspan="4" class="text-center text-muted py-3 small">Memuat periode survei...</td></tr></tbody>
+                    </table>
+                </div>
+            </div>
+
             <!-- Import Card -->
             <div class="card custom-card section-card-body mb-4">
                 <h5 class="fw-bold text-success mb-3"><i class="bi bi-file-earmark-excel-fill me-2"></i>Import Data via Excel</h5>
@@ -451,4 +549,5 @@
 <script src="{{ url_for('static', filename='js/clustering.js') }}"></script>
 <script src="{{ url_for('static', filename='js/tabel.js') }}"></script>
 <script src="{{ url_for('static', filename='js/kelola.js') }}"></script>
+<script src="{{ url_for('static', filename='js/survey.js') }}"></script>
 {% endblock %}

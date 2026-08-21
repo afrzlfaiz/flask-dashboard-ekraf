@@ -63,6 +63,15 @@ if not DATABASE_SCHEMA.replace("_", "").isalnum():
     raise RuntimeError("DATABASE_SCHEMA tidak valid.")
 if not 1 <= DATABASE_POOL_SIZE <= 20:
     raise RuntimeError("DATABASE_POOL_SIZE harus berada pada rentang 1–20.")
+
+# ── Seed survei tahunan ekraf ─────────────────────────────────
+# Dipakai oleh script import awal; data runtime panel dibaca dari PostgreSQL.
+# Default mengikuti struktur folder lokal proyek: ../laporan/Data PKL Fix.xlsx.
+SURVEY_DATA_PATH = _resolve_path(
+    os.getenv("SURVEY_DATA_PATH", "../laporan/Data PKL Fix.xlsx")
+)
+SURVEY_SHEET_NAME = os.getenv("SURVEY_SHEET_NAME", "Sheet6").strip() or "Sheet6"
+
 GEOJSON_DIR = _resolve_path(os.getenv("GEOJSON_DIR", "geojson"))
 LOG_DIR = _resolve_path(os.getenv("LOG_DIR", "logs"))
 

@@ -116,7 +116,11 @@ const App = {
         if (typeof DBScanMap !== "undefined" && DBScanMap) DBScanMap.invalidateSize({ pan: false });
 
         if (window.Plotly) {
-            ["kecamatan-donut-chart", "subsektor-bar-chart"].forEach(id => {
+            [
+                "kecamatan-donut-chart", "subsektor-bar-chart",
+                "survey-cluster-chart", "survey-subsector-chart",
+                "survey-kecamatan-chart", "survey-pca-chart",
+            ].forEach(id => {
                 const chart = document.getElementById(id);
                 if (chart && chart.offsetParent !== null && chart.data) Plotly.Plots.resize(chart);
             });
@@ -139,6 +143,7 @@ const App = {
 
         const target = document.getElementById(targetId);
         if (target) target.classList.remove("d-none");
+        document.getElementById("filter-card")?.classList.toggle("d-none", targetId === "survey-page");
 
         const link = document.querySelector(`.menu-item[data-target="${targetId}"]`);
         if (link) {
@@ -152,6 +157,7 @@ const App = {
             const pathMap = {
                 "overview-page": "/",
                 "dbscan-page": "/clustering",
+                "survey-page": "/survei",
                 "table-page": "/tabel",
                 "manage-page": "/kelola",
                 "tentang-page": "/tentang"
@@ -184,8 +190,15 @@ const App = {
                 }).catch(err => App.showToast("Error", err.message));
             }
 
+            if (targetId === "survey-page" && typeof refreshSurvey === "function") {
+                refreshSurvey().catch(err => App.showToast("Error", err.message));
+            }
+
             if (refreshData && targetId === "manage-page" && typeof refreshKelolaList === "function") {
                 refreshKelolaList();
+            }
+            if (targetId === "manage-page" && typeof refreshSurveyPeriods === "function") {
+                refreshSurveyPeriods();
             }
         }, 250);
 
@@ -289,6 +302,7 @@ const App = {
             if (App.currentPage === "overview-page" && typeof refreshOverview === "function") refreshOverview();
             if (App.currentPage === "table-page" && typeof ensureTablePage === "function") await ensureTablePage();
             if (App.currentPage === "manage-page" && typeof refreshKelolaList === "function") refreshKelolaList();
+            if (App.currentPage === "manage-page" && typeof refreshSurveyPeriods === "function") refreshSurveyPeriods();
 
             App.showToast("Sukses", `Menampilkan ${kpi.total_pelaku} data pelaku.`);
 
@@ -394,7 +408,11 @@ document.addEventListener("DOMContentLoaded", () => {
     document.getElementById("btn-filter-malang").addEventListener("click", () => App.applyMalangFilter());
     document.getElementById("btn-reset-filter").addEventListener("click", () => App.resetFilters());
     document.getElementById("btn-refresh-data").addEventListener("click", () => {
-        App.applyFilters();
+        if (App.currentPage === "survey-page" && typeof refreshSurvey === "function") {
+            refreshSurvey();
+        } else {
+            App.applyFilters();
+        }
     });
     const filterSearch = document.getElementById("filter-search");
     filterSearch.addEventListener("focus", () => filterSearch.removeAttribute("readonly"), { once: true });
@@ -453,6 +471,7 @@ document.addEventListener("DOMContentLoaded", () => {
         const path = window.location.pathname;
         const pathMap = {
             "/clustering": "dbscan-page",
+            "/survei": "survey-page",
             "/tabel": "table-page",
             "/kelola": "manage-page",
             "/tentang": "tentang-page"
@@ -467,6 +486,7 @@ document.addEventListener("DOMContentLoaded", () => {
         const initialPath = window.location.pathname;
         const pathMap = {
             "/clustering": "dbscan-page",
+            "/survei": "survey-page",
             "/tabel": "table-page",
             "/kelola": "manage-page",
             "/tentang": "tentang-page"

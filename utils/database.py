@@ -156,6 +156,36 @@ def initialize_database(database_url: str | None = None) -> None:
         _ensure_columns(conn, "users", USER_COLUMNS)
 
         conn.execute(f"""
+            CREATE TABLE IF NOT EXISTS survey_periods (
+                id BIGSERIAL PRIMARY KEY,
+                survey_year INTEGER NOT NULL UNIQUE,
+                label TEXT NOT NULL,
+                source_filename TEXT NOT NULL,
+                source_sheet TEXT NOT NULL,
+                file_sha256 TEXT NOT NULL,
+                status TEXT NOT NULL DEFAULT 'active',
+                total_rows INTEGER NOT NULL DEFAULT 0,
+                valid_rows INTEGER NOT NULL DEFAULT 0,
+                created_at TEXT NOT NULL,
+                created_by BIGINT,
+                updated_at TEXT,
+                updated_by BIGINT
+            )
+        """)
+        conn.execute(f"""
+            CREATE TABLE IF NOT EXISTS survey_responses (
+                id BIGSERIAL PRIMARY KEY,
+                period_id BIGINT NOT NULL,
+                row_number INTEGER NOT NULL,
+                data_json TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                created_by BIGINT,
+                UNIQUE (period_id, row_number),
+                FOREIGN KEY (period_id) REFERENCES survey_periods(id) ON DELETE CASCADE
+            )
+        """)
+
+        conn.execute(f"""
             CREATE TABLE IF NOT EXISTS audit_logs (
                 id BIGSERIAL PRIMARY KEY,
                 user_id BIGINT,
@@ -233,6 +263,9 @@ def initialize_database(database_url: str | None = None) -> None:
             "CREATE INDEX IF NOT EXISTS idx_audit_created ON audit_logs(created_at)",
             "CREATE INDEX IF NOT EXISTS idx_login_attempt ON login_attempts(username, ip_address, attempted_at)",
             "CREATE INDEX IF NOT EXISTS idx_staging_batch ON import_staging(batch_id, validation_status)",
+            "CREATE INDEX IF NOT EXISTS idx_survey_period_year ON survey_periods(survey_year)",
+            "CREATE UNIQUE INDEX IF NOT EXISTS idx_survey_period_hash ON survey_periods(file_sha256)",
+            "CREATE INDEX IF NOT EXISTS idx_survey_response_period ON survey_responses(period_id, row_number)",
         ):
             conn.execute(statement)
 

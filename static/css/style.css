@@ -1062,6 +1062,51 @@ button,
     padding-left: 1.35rem;
 }
 
+/* Annual survey panel */
+.survey-filter-grid {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 0.9rem;
+}
+
+.survey-chart {
+    width: 100%;
+    min-height: 20rem;
+}
+
+.survey-profile-card {
+    padding: 1rem;
+    background: #f8fbfe;
+    border: 1px solid var(--border-color);
+    border-left: 0.25rem solid var(--primary-blue);
+    border-radius: var(--radius-md);
+}
+
+.survey-profile-dot {
+    width: 0.75rem;
+    height: 0.75rem;
+    flex: 0 0 0.75rem;
+    border-radius: 50%;
+}
+
+.survey-profile-metrics {
+    display: grid;
+    gap: 0.35rem;
+    color: var(--text-muted);
+    font-size: 0.73rem;
+}
+
+.survey-profile-metrics span {
+    display: flex;
+    justify-content: space-between;
+    gap: 0.5rem;
+}
+
+.survey-profile-metrics strong {
+    color: var(--text-dark);
+    text-align: right;
+}
+
 /* Feedback and footer */
 .custom-toast {
     position: fixed;
@@ -1371,11 +1416,19 @@ button,
     .sidebar-footer-banner {
         display: block;
     }
+
+    .survey-filter-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
 }
 
 @media (max-width: 47.99rem) {
     .main-content {
         padding: 0.75rem;
+    }
+
+    .survey-filter-grid {
+        grid-template-columns: 1fr;
     }
 
     .top-header {

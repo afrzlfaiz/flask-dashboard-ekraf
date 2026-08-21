@@ -16,6 +16,7 @@ Aplikasi ini dirancang dengan gaya **Modern Government Dashboard** bertema teran
 6. **Kelola Data (CRUD)**: Manajemen data berbasis role, soft-delete/restore, audit log, dan import Excel melalui staging + preview sebelum commit.
 7. **Filter Global**: Penyaringan data berdasarkan Kecamatan, Kelurahan, Subsektor, Nama Narasumber, atau kata kunci lainnya yang berlaku di semua halaman.
 8. **Keamanan P0**: Dashboard publik teragregasi, login dengan session aman, CSRF, rate-limit login, CORS allowlist, dan audit log.
+9. **Panel Survei Tahunan Ekraf**: Ringkasan agregat data survei, distribusi subsektor/kecamatan, profil cluster, PCA, dan filter khusus yang terpisah dari data spasial utama.
 
 ---
 
@@ -117,6 +118,13 @@ cp .env.example .env
 ### 4. Setup Database
 
 Aplikasi membuat atau memperbarui tabel PostgreSQL secara otomatis saat startup. Data dikelola langsung melalui Supabase dan fitur impor XLSX di halaman Kelola Data.
+
+Panel Survei Tahunan menyimpan jawaban ke database per periode tahun. Periode awal 2026 dapat di-seed dari sheet `Sheet6` pada file `SURVEY_DATA_PATH` (default lokal: `../laporan/Data PKL Fix.xlsx`) menggunakan script import. Tahun berikutnya ditambahkan dari halaman **Kelola Data**; dashboard selalu menganalisis satu periode terpilih sehingga hasil antar-tahun tidak digabung.
+
+Untuk seed awal secara manual:
+```bash
+python scripts/import_survey.py --year 2026 --sheet Sheet6
+```
 
 ### 5. Jalankan Aplikasi
 Jalankan server Flask lokal:
