@@ -31,6 +31,20 @@
         </div>
     </form>
     <div id="survey-import-alert" class="alert d-none mt-3 mb-0 py-2 small" role="alert"></div>
+    <div class="survey-template-box mt-4">
+        <div>
+            <strong><i class="bi bi-file-earmark-spreadsheet me-1"></i>Butuh format file?</strong>
+            <p class="small text-muted mb-0">Unduh template dengan nama kolom yang sesuai untuk proses import survei.</p>
+        </div>
+        <div class="survey-template-actions">
+            <a class="btn btn-outline-success btn-sm rounded-3" href="/api/survey/template?format=xlsx" download>
+                <i class="bi bi-file-earmark-excel me-1"></i>Template XLSX
+            </a>
+            <a class="btn btn-outline-secondary btn-sm rounded-3" href="/api/survey/template?format=csv" download>
+                <i class="bi bi-filetype-csv me-1"></i>Template CSV
+            </a>
+        </div>
+    </div>
 </section>
 
 <section class="card custom-card section-card-body">

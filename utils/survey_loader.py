@@ -65,6 +65,8 @@ _RENAME_MAP = {
     "Kualifikasi pendidikan karyawan": "pendidikan_karyawan",
 }
 
+SURVEY_TEMPLATE_COLUMNS = list(_RENAME_MAP)
+
 _REQUIRED_COLUMNS = {
     "nama_usaha",
     "subsektor",

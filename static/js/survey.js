@@ -10,9 +10,18 @@ const SurveyPage = (() => {
     const year = () => root()?.dataset.periodYear || "";
     const number = value => Number(value || 0).toLocaleString("id-ID");
     const percent = value => `${Number(value || 0).toLocaleString("id-ID", { maximumFractionDigits: 1 })}%`;
-    const rupiah = value => new Intl.NumberFormat("id-ID", {
-        style: "currency", currency: "IDR", maximumFractionDigits: 0,
-    }).format(Number(value || 0));
+    const rupiah = value => {
+        const amount = Number(value || 0);
+        const absolute = Math.abs(amount);
+        const units = absolute >= 1e12 ? [1e12, " triliun"]
+            : absolute >= 1e9 ? [1e9, " miliar"]
+            : absolute >= 1e6 ? [1e6, " juta"]
+            : [1, ""];
+        const formatted = new Intl.NumberFormat("id-ID", {
+            maximumFractionDigits: units[0] === 1 ? 0 : 2,
+        }).format(Math.abs(amount) / units[0]);
+        return `${amount < 0 ? "-" : ""}Rp${formatted}${units[1]}`;
+    };
     const escape = value => String(value ?? "").replace(/[&<>'"]/g, char => ({
         "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;",
     })[char]);

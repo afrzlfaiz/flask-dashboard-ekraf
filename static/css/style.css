@@ -524,6 +524,10 @@ button,
     gap: 0.75rem;
 }
 
+.section-heading > div {
+    min-width: 0;
+}
+
 .filter-heading h2,
 .section-heading h2 {
     margin: 0;
@@ -754,6 +758,7 @@ button,
 .kpi-card {
     display: flex;
     height: 100%;
+    min-width: 0;
     min-height: 7.2rem;
     align-items: center;
     gap: 0.8rem;
@@ -786,12 +791,17 @@ button,
 .kpi-icon-teal { color: #0b7e76; background: #eafcf9; }
 
 .kpi-value {
+    min-width: 0;
+    max-width: 100%;
+    overflow: hidden;
     color: #141e31;
     font-size: clamp(1.45rem, 1.8vw, 1.8rem);
     font-weight: 800;
     font-variant-numeric: tabular-nums;
     line-height: 1.1;
     letter-spacing: -0.03em;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .kpi-label {
@@ -1453,6 +1463,32 @@ button,
     max-width: var(--content-max);
     margin-right: auto;
     margin-left: auto;
+}
+
+.survey-template-box {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 0.85rem 1rem;
+    background: #f8fbfe;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+}
+
+.survey-template-box strong {
+    color: var(--text-dark);
+    font-size: 0.8rem;
+}
+
+.survey-template-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+.survey-analysis-page #survey-model-info {
+    overflow-wrap: anywhere;
 }
 
 /* Feedback and footer */
@@ -2138,7 +2174,8 @@ button,
     .survey-top-header,
     .survey-intro-card,
     .survey-period-toolbar,
-    .survey-pagination {
+    .survey-pagination,
+    .survey-template-box {
         align-items: stretch;
         flex-direction: column;
     }
@@ -2162,5 +2199,23 @@ button,
 
     .survey-pagination .btn {
         flex: 1;
+    }
+
+    .survey-template-actions .btn {
+        flex: 1;
+    }
+
+    .survey-analysis-page .section-toolbar > .d-flex {
+        width: 100%;
+        flex-wrap: wrap;
+    }
+
+    .survey-analysis-page .section-toolbar > .d-flex > div:first-child {
+        flex: 1 1 12rem;
+        min-width: 0;
+    }
+
+    .survey-analysis-page #survey-filter-cluster {
+        width: 100%;
     }
 }

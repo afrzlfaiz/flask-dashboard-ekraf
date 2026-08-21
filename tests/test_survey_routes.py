@@ -2,7 +2,7 @@ import unittest
 from unittest.mock import patch
 
 from app import create_app
-from api.survey import _page_arg
+from api.survey import _page_arg, _survey_template_file
 
 
 class SurveyRouteAccessTest(unittest.TestCase):
@@ -24,6 +24,7 @@ class SurveyRouteAccessTest(unittest.TestCase):
     def test_survey_apis_reject_anonymous_users(self):
         for path in (
             "/api/survey/periods",
+            "/api/survey/template?format=xlsx",
             "/api/survey/periods/2026/summary",
             "/api/survey/periods/2026/actors?page=1&per_page=50",
         ):
@@ -31,6 +32,14 @@ class SurveyRouteAccessTest(unittest.TestCase):
                 response = self.client.get(path)
                 self.assertEqual(response.status_code, 401)
                 self.assertFalse(response.get_json()["success"])
+
+    def test_survey_templates_have_downloadable_content(self):
+        csv_buffer, csv_mimetype = _survey_template_file("csv")
+        xlsx_buffer, xlsx_mimetype = _survey_template_file("xlsx")
+        self.assertEqual(csv_mimetype, "text/csv")
+        self.assertEqual(xlsx_mimetype, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+        self.assertTrue(csv_buffer.getvalue().startswith(b"\xef\xbb\xbfNama Usaha"))
+        self.assertTrue(xlsx_buffer.getvalue().startswith(b"PK"))
 
     def test_actor_page_size_is_capped_at_fifty(self):
         with self.app.test_request_context("/api/survey/periods/2026/actors?per_page=500"):

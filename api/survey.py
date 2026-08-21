@@ -5,7 +5,7 @@ import hashlib
 from io import BytesIO
 
 import pandas as pd
-from flask import current_app, g, jsonify, request
+from flask import current_app, g, jsonify, request, send_file
 from flask_login import current_user
 
 from api import api_bp
@@ -25,6 +25,7 @@ from utils.survey_loader import (
     load_analysis_dataframe,
     load_analysis_page,
     load_survey_periods,
+    SURVEY_TEMPLATE_COLUMNS,
 )
 
 
@@ -40,6 +41,20 @@ def _error_response(error: Exception):
         "success": False,
         "message": "Data survei belum dapat dimuat. Periksa konfigurasi database atau hubungi administrator.",
     }), 500
+
+
+def _survey_template_file(fmt: str) -> tuple[BytesIO, str]:
+    dataframe = pd.DataFrame(columns=SURVEY_TEMPLATE_COLUMNS)
+    buffer = BytesIO()
+    if fmt == "xlsx":
+        with pd.ExcelWriter(buffer, engine="openpyxl") as writer:
+            dataframe.to_excel(writer, index=False, sheet_name=SURVEY_SHEET_NAME)
+        mimetype = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    else:
+        buffer.write(dataframe.to_csv(index=False).encode("utf-8-sig"))
+        mimetype = "text/csv"
+    buffer.seek(0)
+    return buffer, mimetype
 
 
 def _cluster_arg() -> str:
@@ -149,6 +164,21 @@ def _summary(period: dict, frame: pd.DataFrame, cluster: str) -> dict:
         },
         "profiles": profiles,
     }
+
+
+@api_bp.route("/survey/template")
+@role_required("admin")
+def survey_template():
+    fmt = request.args.get("format", "xlsx").lower()
+    if fmt not in {"csv", "xlsx"}:
+        return jsonify({"success": False, "message": "Format template harus csv atau xlsx."}), 400
+    buffer, mimetype = _survey_template_file(fmt)
+    return send_file(
+        buffer,
+        mimetype=mimetype,
+        as_attachment=True,
+        download_name=f"template-survei-ekraf.{fmt}",
+    )
 
 
 @api_bp.route("/survey/periods")
