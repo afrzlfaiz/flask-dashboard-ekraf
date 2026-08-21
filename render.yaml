@@ -4,7 +4,7 @@ services:
     runtime: docker
     region: singapore
     healthCheckPath: /healthz
-    autoDeployTrigger: commit
+    autoDeployTrigger: off
     envVars:
       - key: FLASK_ENV
         value: production

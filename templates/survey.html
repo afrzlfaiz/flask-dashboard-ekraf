@@ -1,11 +1,49 @@
-{% extends "base.html" %}
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="csrf-token" content="{{ csrf_token() }}">
+    <title>Survei Tahunan Ekraf — Dashboard Ekonomi Kreatif</title>
+    <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='img/logo.svg') }}">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.2/font/bootstrap-icons.css" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body class="dashboard-body survey-standalone">
+    <main class="main-content survey-page-shell" id="main-content">
+        <header class="top-header">
+            <div class="header-identity">
+                <a class="btn btn-outline-primary rounded-3" href="/" aria-label="Kembali ke dashboard utama">
+                    <i class="bi bi-arrow-left" aria-hidden="true"></i>
+                    <span class="d-none d-sm-inline">Dashboard Utama</span>
+                </a>
+                <div class="header-copy">
+                    <h1>Survei Tahunan Ekraf</h1>
+                    <p>Analisis karakteristik usaha berdasarkan periode survei</p>
+                </div>
+            </div>
+            <div class="header-actions">
+                <div class="text-end d-none d-md-block">
+                    <span class="time-badge" id="live-time-badge">
+                        <i class="bi bi-calendar3 me-1 text-primary"></i> Loading...
+                    </span>
+                </div>
+                <button class="btn btn-primary header-refresh" id="btn-refresh-data" type="button">
+                    <i class="bi bi-arrow-clockwise" aria-hidden="true"></i>
+                    <span>Refresh Data</span>
+                </button>
+            </div>
+        </header>
 
-{% block title %}Survei Tahunan Ekraf — Dashboard Ekonomi Kreatif{% endblock %}
+        {% include "_survey_panel.html" %}
 
-{% block content %}
-{% include "_survey_panel.html" %}
-{% endblock %}
+        <footer class="app-footer">
+            <span>© 2026 BAPPEDA Kota Malang</span>
+            <span>Survei Tahunan Ekraf</span>
+        </footer>
+    </main>
 
-{% block scripts %}
-<script src="{{ url_for('static', filename='js/survey.js') }}"></script>
-{% endblock %}
+    <script src="{{ url_for('static', filename='js/survey.js') }}"></script>
+</body>
+</html>

@@ -111,7 +111,7 @@ def create_app(test_config=None):
 
     @app.route("/survei")
     def survey_page():
-        return render_template("survey.html", standalone_survey=True)
+        return render_template("survey.html")
 
     @app.route("/healthz")
     def healthz():
