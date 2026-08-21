@@ -1,4 +1,5 @@
 import unittest
+from unittest.mock import patch
 
 from app import create_app
 from api.survey import _page_arg
@@ -7,7 +8,10 @@ from api.survey import _page_arg
 class SurveyRouteAccessTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.app = create_app({"TESTING": True, "WTF_CSRF_ENABLED": False})
+        # These assertions cover anonymous routing only; they do not need a
+        # live PostgreSQL instance in CI.
+        with patch("app.init_users_table"):
+            cls.app = create_app({"TESTING": True, "WTF_CSRF_ENABLED": False})
         cls.client = cls.app.test_client()
 
     def test_survey_pages_redirect_anonymous_users_to_admin_login(self):
