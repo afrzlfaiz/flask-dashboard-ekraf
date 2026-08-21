@@ -1,6 +1,8 @@
 import unittest
 
-from api.crud import validate_actor_payload
+from flask import Flask
+
+from api.crud import _bounded_int, validate_actor_payload
 
 
 class EmptyReferenceConnection:
@@ -27,6 +29,14 @@ class CrudLocationTest(unittest.TestCase):
         self.assertEqual(errors, [])
         self.assertEqual(values["Kecamatan"], "Kecamatan Baru")
         self.assertEqual(values["Kelurahan"], "Kelurahan Baru")
+
+
+class CrudPaginationTest(unittest.TestCase):
+    def test_page_size_is_bounded(self):
+        app = Flask(__name__)
+        with app.test_request_context("/api/crud?page=0&per_page=500"):
+            self.assertEqual(_bounded_int("page", 1, 1, 2_147_483_647), 1)
+            self.assertEqual(_bounded_int("per_page", 25, 1, 50), 50)
 
 
 if __name__ == "__main__":

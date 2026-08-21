@@ -51,6 +51,16 @@ MAX_LENGTHS = {
     "email": 254,
 }
 EMAIL_RE = re.compile(r"^[^\s@]+@[^\s@]+\.[^\s@]+$")
+CRUD_DEFAULT_PAGE_SIZE = 25
+CRUD_MAX_PAGE_SIZE = 50
+
+
+def _bounded_int(name: str, default: int, minimum: int, maximum: int) -> int:
+    try:
+        value = int(request.args.get(name, default))
+    except (TypeError, ValueError):
+        return default
+    return max(minimum, min(value, maximum))
 
 
 def _canonical_payload(body: dict) -> dict:
@@ -176,13 +186,43 @@ def _audit_context():
 @api_bp.route("/crud", methods=["GET"])
 @role_required("operator")
 def crud_list():
+    page = _bounded_int("page", 1, 1, 2_147_483_647)
+    per_page = _bounded_int("per_page", CRUD_DEFAULT_PAGE_SIZE, 1, CRUD_MAX_PAGE_SIZE)
     include_inactive = request.args.get("include_inactive") == "1" and current_user.has_role("admin")
     where = "1 = 1" if include_inactive else "is_active = 1"
     with connection() as conn:
+        total = conn.execute(
+            f"SELECT COUNT(*) AS total FROM pelaku_ekraf WHERE {where}"
+        ).fetchone()["total"]
+        pages = (total + per_page - 1) // per_page if total else 0
+        page = min(page, pages) if pages else 1
+        offset = (page - 1) * per_page
         rows = conn.execute(
-            f"SELECT * FROM pelaku_ekraf WHERE {where} ORDER BY is_active DESC, id DESC"
+            f"SELECT * FROM pelaku_ekraf WHERE {where} "
+            "ORDER BY is_active DESC, id DESC LIMIT %s OFFSET %s",
+            (per_page, offset),
         ).fetchall()
-    return jsonify({"data": [serialize_actor(row) for row in rows]})
+    return jsonify({
+        "data": [serialize_actor(row) for row in rows],
+        "page": page,
+        "per_page": per_page,
+        "total": total,
+        "pages": pages,
+    })
+
+
+@api_bp.route("/crud/<int:actor_id>", methods=["GET"])
+@role_required("operator")
+def crud_get(actor_id):
+    where = "1 = 1" if current_user.has_role("admin") else "is_active = 1"
+    with connection() as conn:
+        row = conn.execute(
+            f"SELECT * FROM pelaku_ekraf WHERE id = %s AND {where}",
+            (actor_id,),
+        ).fetchone()
+    if not row:
+        return jsonify({"success": False, "message": "Data tidak ditemukan."}), 404
+    return jsonify({"data": serialize_actor(row)})
 
 
 @api_bp.route("/crud", methods=["POST"])

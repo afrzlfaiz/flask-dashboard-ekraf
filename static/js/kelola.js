@@ -3,19 +3,25 @@
  */
 const Kelola = {
     currentImportBatch: null,
+    listPage: 1,
+    listPerPage: 25,
 
     // ── Refresh the manage list table ──────────────────
-    async refreshList() {
-        const q = App.buildFilterQuery();
+    async refreshList(page = this.listPage) {
         try {
             if (!Auth.isAuthenticated()) return;
-            const includeInactive = Auth.hasRole("admin") ? "?include_inactive=1" : "";
-            const resp = await fetch(`/api/crud${includeInactive}`);
+            const params = new URLSearchParams({
+                page: String(page),
+                per_page: String(this.listPerPage),
+            });
+            if (Auth.hasRole("admin")) params.set("include_inactive", "1");
+            const resp = await fetch(`/api/crud?${params.toString()}`);
             if (!resp.ok) return;
             const result = await resp.json();
+            this.listPage = Number(result.page || page);
             const tbody = document.getElementById("crud-list-table-body");
             tbody.innerHTML = "";
-            result.data.forEach(item => {
+            (result.data || []).forEach(item => {
                     const deleteBtn = Auth.hasRole("admin") && item.is_active
                         ? `<button class="btn btn-sm btn-link text-danger p-0" onclick="Kelola.deleteActor(${item.id})" title="Nonaktifkan"><i class="bi bi-trash-fill"></i></button>`
                         : "";
@@ -34,19 +40,41 @@ const Kelola = {
                             </td>
                         </tr>`;
             });
+            this.renderListPagination(result);
         } catch (err) {
             console.error("Kelola list error:", err);
         }
+    },
+
+    renderListPagination(result) {
+        const container = document.getElementById("crud-list-pagination");
+        if (!container) return;
+        const total = Number(result.total || 0);
+        const page = Number(result.page || 1);
+        const pages = Number(result.pages || 0);
+        if (!total || !pages) {
+            container.innerHTML = '<span class="small text-muted">Belum ada data.</span>';
+            return;
+        }
+        container.innerHTML = `
+            <span class="small text-muted">${total.toLocaleString("id-ID")} data · Halaman ${page} dari ${pages}</span>
+            <div class="btn-group btn-group-sm" role="group" aria-label="Pagination data pelaku">
+                <button type="button" class="btn btn-outline-secondary" data-crud-page="${page - 1}" ${page <= 1 ? "disabled" : ""}>Sebelumnya</button>
+                <button type="button" class="btn btn-outline-secondary" data-crud-page="${page + 1}" ${page >= pages ? "disabled" : ""}>Berikutnya</button>
+            </div>`;
+        container.querySelectorAll("[data-crud-page]").forEach(button => {
+            button.addEventListener("click", () => this.refreshList(Number(button.dataset.crudPage)));
+        });
     },
 
     // ── Edit actor — fill form ─────────────────────────
     async editActor(id) {
         App.switchPage("manage-page");
         try {
-            const resp = await fetch("/api/crud");
+            const resp = await fetch(`/api/crud/${id}`);
             const result = await resp.json();
-            const actor = result.data.find(x => x.id === id);
-            if (!actor) return;
+            if (!resp.ok) throw new Error(result.message || "Data tidak ditemukan.");
+            const actor = result.data;
 
             document.getElementById("crud-form-title").innerHTML = '<i class="bi bi-pencil-square me-2 text-warning"></i>Edit Data Pelaku';
             document.getElementById("crud-id").value = actor.id;
