@@ -804,6 +804,15 @@ button,
     white-space: nowrap;
 }
 
+.survey-kpi-sales {
+    overflow: hidden;
+}
+
+.survey-kpi-sales .kpi-value {
+    font-size: clamp(1.05rem, 1.45vw, 1.5rem);
+    letter-spacing: -0.045em;
+}
+
 .kpi-label {
     margin-top: 0.25rem;
     color: #4f5b70;

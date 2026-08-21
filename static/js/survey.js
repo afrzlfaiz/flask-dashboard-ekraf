@@ -13,9 +13,9 @@ const SurveyPage = (() => {
     const rupiah = value => {
         const amount = Number(value || 0);
         const absolute = Math.abs(amount);
-        const units = absolute >= 1e12 ? [1e12, " triliun"]
-            : absolute >= 1e9 ? [1e9, " miliar"]
-            : absolute >= 1e6 ? [1e6, " juta"]
+        const units = absolute >= 1e12 ? [1e12, " T"]
+            : absolute >= 1e9 ? [1e9, " M"]
+            : absolute >= 1e6 ? [1e6, " jt"]
             : [1, ""];
         const formatted = new Intl.NumberFormat("id-ID", {
             maximumFractionDigits: units[0] === 1 ? 0 : 2,
@@ -60,7 +60,9 @@ const SurveyPage = (() => {
     function renderKpis(data) {
         const kpi = data.kpi || {};
         document.getElementById("survey-total-observasi").textContent = number(kpi.total_observasi);
-        document.getElementById("survey-total-penjualan").textContent = rupiah(kpi.total_penjualan);
+        const sales = document.getElementById("survey-total-penjualan");
+        sales.textContent = rupiah(kpi.total_penjualan);
+        sales.title = "T = triliun, M = miliar, jt = juta";
         document.getElementById("survey-median-margin").textContent = percent(kpi.median_margin * 100);
         document.getElementById("survey-total-tenaga-kerja").textContent = number(kpi.total_tenaga_kerja);
         const rate = kpi.total_observasi ? kpi.usaha_tercluster / kpi.total_observasi * 100 : 0;
