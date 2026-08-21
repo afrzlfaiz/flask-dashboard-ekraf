@@ -245,80 +245,10 @@ const Kelola = {
         }
     },
 
-    async loadSurveyPeriods() {
-        const tbody = document.getElementById("survey-period-list-body");
-        if (!tbody) return;
-        try {
-            const resp = await fetch("/api/survey/periods");
-            const result = await resp.json();
-            if (!resp.ok) throw new Error(result.message || "Gagal memuat periode survei.");
-            tbody.innerHTML = result.periods?.length ? result.periods.map(period => `
-                <tr>
-                    <td><strong>${App.escapeHTML(period.survey_year)}</strong></td>
-                    <td>${App.escapeHTML(period.label)}</td>
-                    <td class="text-end">${Number(period.rows || 0).toLocaleString("id-ID")}</td>
-                    <td><span class="badge bg-success-subtle text-success">Aktif</span></td>
-                </tr>`).join("") :
-                '<tr><td colspan="4" class="text-center text-muted py-3 small">Belum ada periode survei.</td></tr>';
-        } catch (err) {
-            tbody.innerHTML = `<tr><td colspan="4" class="text-center text-danger py-3 small">${App.escapeHTML(err.message)}</td></tr>`;
-        }
-    },
-
-    async importSurveyYear() {
-        if (!Auth.require("operator")) return;
-        const yearInput = document.getElementById("survey-year-input");
-        const fileInput = document.getElementById("survey-year-file");
-        const alertEl = document.getElementById("survey-period-alert");
-        const year = Number.parseInt(yearInput?.value || "", 10);
-        const file = fileInput?.files?.[0];
-        const showAlert = (type, message) => {
-            alertEl.className = `alert alert-${type} mt-3 mb-3 py-2 small`;
-            alertEl.textContent = message;
-            alertEl.classList.remove("d-none");
-        };
-
-        if (!Number.isInteger(year) || year < 2026 || year > 2100) {
-            showAlert("danger", "Masukkan tahun survei antara 2026 dan 2100.");
-            return;
-        }
-        if (!file || !file.name.toLowerCase().endsWith(".xlsx")) {
-            showAlert("danger", "Pilih file survei dengan format XLSX.");
-            return;
-        }
-        if (file.size > 10 * 1024 * 1024) {
-            showAlert("danger", "Ukuran file survei melebihi 10 MB.");
-            return;
-        }
-
-        const button = document.getElementById("btn-import-survey-year");
-        button.disabled = true;
-        alertEl.classList.add("d-none");
-        try {
-            const formData = new FormData();
-            formData.append("survey_year", String(year));
-            formData.append("sheet_name", document.getElementById("survey-year-sheet-name")?.textContent || "Sheet6");
-            formData.append("file", file);
-            const resp = await fetch("/api/survey/import", { method: "POST", body: formData });
-            const result = await resp.json();
-            if (!resp.ok) throw new Error(result.message || "Import survei gagal.");
-            showAlert("success", result.message);
-            fileInput.value = "";
-            await this.loadSurveyPeriods();
-            if (typeof SurveyPage !== "undefined") SurveyPage.invalidateOptions();
-            if (App.currentPage === "survey-page" && typeof refreshSurvey === "function") await refreshSurvey();
-        } catch (err) {
-            showAlert("danger", err.message);
-            App.showToast("Import Survei Gagal", err.message);
-        } finally {
-            button.disabled = false;
-        }
-    },
 };
 
 // ── Global hook for tabel.js ──
 window.refreshKelolaList = () => Kelola.refreshList();
-window.refreshSurveyPeriods = () => Kelola.loadSurveyPeriods();
 
 // ── Event bindings ────────────────────────────────────
 document.addEventListener("DOMContentLoaded", () => {
@@ -377,7 +307,6 @@ document.addEventListener("DOMContentLoaded", () => {
     document.getElementById("btn-commit-import").addEventListener("click", () => Kelola.commitImport());
     document.getElementById("btn-cancel-import").addEventListener("click", () => Kelola.cancelImport());
     document.getElementById("btn-rollback-import").addEventListener("click", () => Kelola.rollbackImport());
-    document.getElementById("btn-import-survey-year")?.addEventListener("click", () => Kelola.importSurveyYear());
 
     ["dragenter", "dragover"].forEach(ev => {
         dropZone.addEventListener(ev, e => { e.preventDefault(); dropZone.classList.add("is-dragging"); });

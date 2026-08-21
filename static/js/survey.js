@@ -64,6 +64,19 @@ const SurveyPage = (() => {
         }
     }
 
+    function renderPeriods(periods) {
+        const body = document.getElementById("survey-period-list-body");
+        if (!body) return;
+        body.innerHTML = periods.length ? periods.map(period => `
+            <tr>
+                <td><strong>${escape(period.survey_year)}</strong></td>
+                <td>${escape(period.label)}</td>
+                <td class="text-end">${number(period.rows)}</td>
+                <td><span class="badge bg-success-subtle text-success">Aktif</span></td>
+            </tr>`).join("") :
+            '<tr><td colspan="4" class="text-center text-muted py-3 small">Belum ada periode survei.</td></tr>';
+    }
+
     async function loadOptions() {
         const selectedPeriod = document.getElementById("survey-filter-period")?.value || "";
         if (optionsLoaded && optionsPeriodId === selectedPeriod) return;
@@ -75,6 +88,8 @@ const SurveyPage = (() => {
         setOptions("survey-filter-kecamatan", result.options.kecamatan || [], "Semua Kecamatan");
         setOptions("survey-filter-subsektor", result.options.subsektor || [], "Semua Subsektor");
         setOptions("survey-filter-umkm", result.options.klasifikasi_umkm || [], "Semua Klasifikasi");
+        setOptions("survey-filter-cluster", result.options.cluster || [], "Semua Cluster");
+        renderPeriods(result.periods || []);
         optionsPeriodId = String(result.selected_period_id || result.default_period_id || "");
         optionsLoaded = true;
     }
@@ -86,6 +101,7 @@ const SurveyPage = (() => {
             kecamatan: document.getElementById("survey-filter-kecamatan")?.value || "",
             subsektor: document.getElementById("survey-filter-subsektor")?.value || "",
             klasifikasi_umkm: document.getElementById("survey-filter-umkm")?.value || "",
+            cluster: document.getElementById("survey-filter-cluster")?.value || "",
         };
         Object.entries(values).forEach(([key, value]) => { if (value) params.set(key, value); });
         return params.toString();
@@ -190,6 +206,83 @@ const SurveyPage = (() => {
             '<tr><td colspan="5" class="text-center text-muted py-3">Tidak ada data sesuai filter.</td></tr>';
     }
 
+    function renderActors(data) {
+        const body = document.getElementById("survey-actor-table-body");
+        const counter = document.getElementById("survey-actor-count");
+        const actors = data.actors || [];
+        if (counter) counter.textContent = `${number(actors.length)} pelaku`;
+        if (!body) return;
+        body.innerHTML = actors.length ? actors.map((actor, index) => {
+            const clusterClass = actor.cluster === "Noise"
+                ? "bg-warning text-dark"
+                : actor.cluster === "Tidak terpetakan" ? "bg-secondary" : "bg-primary";
+            const statusClass = actor.status === "Terpetakan" ? "text-success" : "text-muted";
+            return `
+                <tr>
+                    <td>${index + 1}</td>
+                    <td><strong>${escape(actor.nama_usaha)}</strong><div class="small text-muted">Baris survei ${number(actor.row_number)}</div></td>
+                    <td>${escape(actor.subsektor)}</td>
+                    <td>${escape(actor.kelurahan)}, ${escape(actor.kecamatan)}</td>
+                    <td>${escape(actor.klasifikasi_umkm)}</td>
+                    <td><span class="badge ${clusterClass}">${escape(actor.cluster)}</span></td>
+                    <td class="${statusClass}">${escape(actor.status)}</td>
+                </tr>`;
+        }).join("") :
+            '<tr><td colspan="7" class="text-center text-muted py-3">Tidak ada pelaku sesuai filter.</td></tr>';
+    }
+
+    async function importSurveyYear() {
+        const yearInput = document.getElementById("survey-year-input");
+        const fileInput = document.getElementById("survey-year-file");
+        const alertBox = document.getElementById("survey-period-alert");
+        const year = Number.parseInt(yearInput?.value || "", 10);
+        const file = fileInput?.files?.[0];
+        const showAlert = (type, message) => {
+            alertBox.className = `alert alert-${type} mt-3 mb-3 py-2 small`;
+            alertBox.textContent = message;
+            alertBox.classList.remove("d-none");
+        };
+
+        if (!Number.isInteger(year) || year < 2026 || year > 2100) {
+            showAlert("danger", "Masukkan tahun survei antara 2026 dan 2100.");
+            return;
+        }
+        if (!file || !file.name.toLowerCase().endsWith(".xlsx")) {
+            showAlert("danger", "Pilih file survei dengan format XLSX.");
+            return;
+        }
+        if (file.size > 10 * 1024 * 1024) {
+            showAlert("danger", "Ukuran file survei melebihi 10 MB.");
+            return;
+        }
+
+        const button = document.getElementById("btn-import-survey-year");
+        button.disabled = true;
+        alertBox.classList.add("d-none");
+        try {
+            const formData = new FormData();
+            formData.append("survey_year", String(year));
+            formData.append("sheet_name", document.getElementById("survey-year-sheet-name")?.textContent || "Sheet6");
+            formData.append("file", file);
+            const response = await fetch("/api/survey/import", {
+                method: "POST",
+                headers: { "X-CSRFToken": document.querySelector('meta[name="csrf-token"]')?.content || "" },
+                body: formData,
+            });
+            const result = await response.json();
+            if (!response.ok) throw new Error(result.message || "Import survei gagal.");
+            showAlert("success", result.message);
+            fileInput.value = "";
+            optionsLoaded = false;
+            optionsPeriodId = null;
+            await refresh();
+        } catch (error) {
+            showAlert("danger", error.message);
+        } finally {
+            button.disabled = false;
+        }
+    }
+
     async function refresh() {
         const currentRequest = ++requestNumber;
         setLoading(true);
@@ -203,6 +296,7 @@ const SurveyPage = (() => {
             if (currentRequest !== requestNumber) return;
             renderKpis(data);
             renderProfiles(data);
+            renderActors(data);
             renderDistrictTable(data);
             await renderCharts(data);
         } catch (error) {
@@ -216,7 +310,7 @@ const SurveyPage = (() => {
     function reset() {
         const period = document.getElementById("survey-filter-period");
         if (period?.options.length) period.value = period.options[0].value;
-        ["survey-filter-kecamatan", "survey-filter-subsektor", "survey-filter-umkm"].forEach(id => {
+        ["survey-filter-kecamatan", "survey-filter-subsektor", "survey-filter-umkm", "survey-filter-cluster"].forEach(id => {
             const select = document.getElementById(id);
             if (select) select.value = "";
         });
@@ -229,8 +323,9 @@ const SurveyPage = (() => {
         document.getElementById("btn-survey-apply")?.addEventListener("click", refresh);
         document.getElementById("btn-survey-reset")?.addEventListener("click", reset);
         document.getElementById("btn-refresh-data")?.addEventListener("click", refresh);
+        document.getElementById("btn-import-survey-year")?.addEventListener("click", importSurveyYear);
         document.getElementById("survey-filter-period")?.addEventListener("change", () => {
-            ["survey-filter-kecamatan", "survey-filter-subsektor", "survey-filter-umkm"].forEach(id => {
+            ["survey-filter-kecamatan", "survey-filter-subsektor", "survey-filter-umkm", "survey-filter-cluster"].forEach(id => {
                 const select = document.getElementById(id);
                 if (select) select.value = "";
             });

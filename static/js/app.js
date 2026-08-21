@@ -188,9 +188,6 @@ const App = {
             if (refreshData && targetId === "manage-page" && typeof refreshKelolaList === "function") {
                 refreshKelolaList();
             }
-            if (targetId === "manage-page" && typeof refreshSurveyPeriods === "function") {
-                refreshSurveyPeriods();
-            }
         }, 250);
 
         App.setSidebar(false);
@@ -293,7 +290,6 @@ const App = {
             if (App.currentPage === "overview-page" && typeof refreshOverview === "function") refreshOverview();
             if (App.currentPage === "table-page" && typeof ensureTablePage === "function") await ensureTablePage();
             if (App.currentPage === "manage-page" && typeof refreshKelolaList === "function") refreshKelolaList();
-            if (App.currentPage === "manage-page" && typeof refreshSurveyPeriods === "function") refreshSurveyPeriods();
 
             App.showToast("Sukses", `Menampilkan ${kpi.total_pelaku} data pelaku.`);
 

@@ -326,6 +326,10 @@ def _build_profiles(data: pd.DataFrame, reference: pd.DataFrame, cluster_order: 
 def _prepare(raw: pd.DataFrame, path: Path, metadata: dict | None = None) -> dict:
     metadata = metadata or {}
     df = _normalise_frame(raw)
+    if "survey_response_id" not in df:
+        df["survey_response_id"] = np.arange(1, len(df) + 1, dtype=int)
+    if "survey_row_number" not in df:
+        df["survey_row_number"] = np.arange(2, len(df) + 2, dtype=int)
 
     df["biaya_bahan_baku"] = df["bahan_baku_utama"].fillna(0) + df["bahan_baku_tambahan"].fillna(0)
     df["biaya_utilitas"] = df["bahan_bakar"].fillna(0) + df["listrik"].fillna(0) + df["air"].fillna(0)
@@ -537,14 +541,20 @@ def load_survey_data(period_id: int | None = None) -> dict:
 
     with connection() as conn:
         rows = conn.execute(
-            """SELECT data_json FROM survey_responses
+            """SELECT id, row_number, data_json FROM survey_responses
                WHERE period_id = %s ORDER BY row_number""",
             (selected_id,),
         ).fetchall()
     if not rows:
         raise LookupError("Periode survei tidak memiliki baris jawaban.")
 
-    raw = pd.DataFrame([json.loads(row["data_json"]) for row in rows])
+    records = []
+    for row in rows:
+        record = json.loads(row["data_json"])
+        record["survey_response_id"] = int(row["id"])
+        record["survey_row_number"] = int(row["row_number"])
+        records.append(record)
+    raw = pd.DataFrame(records)
     prepared = _prepare(
         raw,
         Path(period["source_filename"]),
@@ -578,6 +588,7 @@ def filter_survey_data(
     kecamatan: str = "",
     subsektor: str = "",
     klasifikasi_umkm: str = "",
+    cluster: str = "",
 ) -> pd.DataFrame:
     """Filter survey rows without changing the cached source frame."""
     filtered = df
@@ -587,4 +598,6 @@ def filter_survey_data(
         filtered = filtered[filtered["subsektor_ringkas"] == subsektor]
     if klasifikasi_umkm:
         filtered = filtered[filtered["klasifikasi_umkm"] == klasifikasi_umkm]
+    if cluster and "cluster" in filtered.columns:
+        filtered = filtered[filtered["cluster"] == cluster]
     return filtered.copy()

@@ -49,7 +49,7 @@
             <a href="/clustering" class="menu-item" data-target="dbscan-page">
                 <i class="bi bi-geo-fill"></i> Clustering DBSCAN
             </a>
-            <a href="/survei" class="menu-item{% if is_standalone_survey %} active{% endif %}" data-target="survey-page"{% if is_standalone_survey %} aria-current="page"{% endif %}>
+            <a href="/survei" class="menu-item auth-admin-only{% if is_standalone_survey %} active{% endif %}" data-target="survey-page" style="display:none;"{% if is_standalone_survey %} aria-current="page"{% endif %}>
                 <i class="bi bi-bar-chart-line-fill"></i> Survei Tahunan Ekraf
             </a>
             <a href="/tabel" class="menu-item" data-target="table-page">

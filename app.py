@@ -111,6 +111,10 @@ def create_app(test_config=None):
 
     @app.route("/survei")
     def survey_page():
+        if not current_user.is_authenticated:
+            return redirect(url_for("admin_login_page", redirect="/survei"))
+        if not current_user.has_role("admin"):
+            return redirect(url_for("dashboard"))
         return render_template("survey.html")
 
     @app.route("/healthz")

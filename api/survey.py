@@ -45,6 +45,7 @@ def _filters():
         "kecamatan": request.args.get("kecamatan", "").strip(),
         "subsektor": request.args.get("subsektor", "").strip(),
         "klasifikasi_umkm": request.args.get("klasifikasi_umkm", "").strip(),
+        "cluster": request.args.get("cluster", "").strip(),
     }
 
 
@@ -89,7 +90,61 @@ def _kecamatan_summary(df: pd.DataFrame) -> list[dict]:
     ]
 
 
-def _summary(bundle: dict, filtered: pd.DataFrame) -> dict:
+def _text_value(value, fallback="—") -> str:
+    if value is None:
+        return fallback
+    try:
+        if pd.isna(value):
+            return fallback
+    except (TypeError, ValueError):
+        pass
+    return str(value)
+
+
+def _number_value(value):
+    try:
+        if pd.isna(value):
+            return None
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _actor_rows(source: pd.DataFrame, modeled: pd.DataFrame) -> list[dict]:
+    """Return one cluster result per surveyed actor for the selected period."""
+    model_by_id = {}
+    for _, row in modeled.iterrows():
+        response_id = _number_value(row.get("survey_response_id"))
+        if response_id is not None:
+            model_by_id[int(response_id)] = row
+
+    actors = []
+    for _, row in source.iterrows():
+        response_id = _number_value(row.get("survey_response_id"))
+        response_key = int(response_id) if response_id is not None else None
+        model = model_by_id.get(response_key)
+        cluster = _text_value(model.get("cluster")) if model is not None else "Tidak terpetakan"
+        cluster_id = int(model["cluster_id"]) if model is not None and _number_value(model.get("cluster_id")) is not None else None
+        status = "Noise" if cluster == "Noise" else ("Terpetakan" if model is not None else "Data tidak lengkap")
+        actors.append({
+            "response_id": response_key,
+            "row_number": int(_number_value(row.get("survey_row_number")) or 0),
+            "nama_usaha": _text_value(row.get("nama_usaha")),
+            "subsektor": _text_value(row.get("subsektor_ringkas")),
+            "kecamatan": _text_value(row.get("kecamatan")),
+            "kelurahan": _text_value(row.get("kelurahan")),
+            "klasifikasi_umkm": _text_value(row.get("klasifikasi_umkm")),
+            "cluster": cluster,
+            "cluster_id": cluster_id,
+            "status": status,
+            "penjualan_tahunan": _number_value(model.get("penjualan_tahunan")) if model is not None else None,
+            "margin_profit": _number_value(model.get("margin_profit")) if model is not None else None,
+            "tenaga_kerja": _number_value(model.get("tenaga_kerja")) if model is not None else None,
+        })
+    return actors
+
+
+def _summary(bundle: dict, filtered: pd.DataFrame, source_filtered: pd.DataFrame) -> dict:
     cluster_order = bundle["cluster_order"]
     labels = filtered["cluster"].value_counts().reindex(cluster_order, fill_value=0)
     non_noise = [label for label in cluster_order if label != "Noise"]
@@ -136,12 +191,14 @@ def _summary(bundle: dict, filtered: pd.DataFrame) -> dict:
             "umkm": _distribution(filtered["klasifikasi_umkm"]),
         },
         "profiles": profiles,
+        "actors": _actor_rows(source_filtered, filtered),
         "kecamatan_summary": _kecamatan_summary(filtered),
         "pca": points,
     }
 
 
 @api_bp.route("/survey/periods")
+@role_required("admin")
 def survey_periods():
     try:
         periods = load_survey_periods()
@@ -155,6 +212,7 @@ def survey_periods():
 
 
 @api_bp.route("/survey/options")
+@role_required("admin")
 def survey_options():
     try:
         periods = load_survey_periods()
@@ -169,6 +227,7 @@ def survey_options():
                 "kecamatan": sorted(df["kecamatan"].dropna().unique().tolist()),
                 "subsektor": sorted(df["subsektor_ringkas"].dropna().unique().tolist()),
                 "klasifikasi_umkm": sorted(df["klasifikasi_umkm"].dropna().unique().tolist()),
+                "cluster": [cluster for cluster in bundle["cluster_order"] if cluster in set(df["cluster"].dropna())],
             },
             "source": {
                 "period_id": bundle["period_id"],
@@ -184,17 +243,24 @@ def survey_options():
 
 
 @api_bp.route("/survey/summary")
+@role_required("admin")
 def survey_summary():
     try:
         bundle = load_survey_data(_period_id_arg())
-        filtered = filter_survey_data(bundle["model_df"], **_filters())
-        return jsonify(_summary(bundle, filtered))
+        filters = _filters()
+        filtered = filter_survey_data(bundle["model_df"], **filters)
+        source_filters = {key: value for key, value in filters.items() if key != "cluster"}
+        source_filtered = filter_survey_data(bundle["df"], **source_filters)
+        if filters["cluster"]:
+            response_ids = set(filtered["survey_response_id"].dropna().astype(int))
+            source_filtered = source_filtered[source_filtered["survey_response_id"].isin(response_ids)]
+        return jsonify(_summary(bundle, filtered, source_filtered))
     except Exception as error:
         return _error_response(error)
 
 
 @api_bp.route("/survey/import", methods=["POST"])
-@role_required("operator")
+@role_required("admin")
 def survey_import():
     if "file" not in request.files:
         return jsonify({"success": False, "message": "Tidak ada file survei yang diunggah."}), 400

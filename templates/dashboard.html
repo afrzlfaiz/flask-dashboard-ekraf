@@ -327,35 +327,6 @@
         </div>
 
         <div class="col-12 col-lg-7 mb-4">
-            <!-- Annual survey periods -->
-            <div class="card custom-card section-card-body mb-4">
-                <h5 class="fw-bold text-primary mb-2"><i class="bi bi-calendar2-range-fill me-2"></i>Kelola Survei Tahunan Ekraf</h5>
-                <p class="text-muted small mb-3">Tambahkan survei tahun berikutnya. Setiap tahun disimpan sebagai periode terpisah dan hasil analisisnya tidak digabung.</p>
-                <div class="row g-2 align-items-end">
-                    <div class="col-12 col-sm-3">
-                        <label class="form-label small fw-bold text-muted" for="survey-year-input">TAHUN SURVEI</label>
-                        <input type="number" class="form-control form-control-sm rounded-3" id="survey-year-input" min="2026" max="2100" placeholder="2027">
-                    </div>
-                    <div class="col-12 col-sm-5">
-                        <label class="form-label small fw-bold text-muted" for="survey-year-file">FILE XLSX SURVEI</label>
-                        <input type="file" class="form-control form-control-sm rounded-3" id="survey-year-file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet">
-                    </div>
-                    <div class="col-12 col-sm-4">
-                        <button class="btn btn-primary btn-sm w-100 rounded-3" type="button" id="btn-import-survey-year" style="min-height: 2.55rem;">
-                            <i class="bi bi-database-up me-1"></i>Simpan Periode
-                        </button>
-                    </div>
-                </div>
-                <small class="text-muted d-block mt-2">Sheet yang digunakan: <strong id="survey-year-sheet-name">Sheet6</strong>. Tahun 2026 adalah periode awal.</small>
-                <div id="survey-period-alert" class="alert d-none mt-3 mb-3 py-2 small" role="alert"></div>
-                <div class="table-responsive manage-table-scroll">
-                    <table class="table table-sm align-middle mb-0">
-                        <thead class="table-light"><tr><th>Tahun</th><th>Periode</th><th class="text-end">Baris</th><th>Status</th></tr></thead>
-                        <tbody id="survey-period-list-body"><tr><td colspan="4" class="text-center text-muted py-3 small">Memuat periode survei...</td></tr></tbody>
-                    </table>
-                </div>
-            </div>
-
             <!-- Import Card -->
             <div class="card custom-card section-card-body mb-4">
                 <h5 class="fw-bold text-success mb-3"><i class="bi bi-file-earmark-excel-fill me-2"></i>Import Data via Excel</h5>
